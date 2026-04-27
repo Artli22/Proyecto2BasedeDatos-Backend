@@ -1,51 +1,42 @@
 package main 
 type Cliente struct {
-	id_cliente int `json:"id_cliente"`
-	nombre 	   string `json:"nombre"`
-	telefono   *string `json:"telefono"`
-	correo     *string `json:"correo"`
-	activo     bool `json:"activo"`
+	Id_cliente int `json:"id_cliente"`
+	Nombre 	   string `json:"nombre"`
+	Telefono   *string `json:"telefono"`
+	Correo     *string `json:"correo"`
+	Activo     bool `json:"activo"`
 }
 
 type Empleado struct {
-	id_empleado int `json:"id_empleado"`
-	nombre      string `json:"nombre"`
-	telefono    *string `json:"telefono"`
-	correo      *string `json:"correo"`
-	activo      bool `json:"activo"`
+	Id_empleado int `json:"id_empleado"`
+	Nombre      string `json:"nombre"`
+	Telefono    *string `json:"telefono"`
+	Correo      *string `json:"correo"`
+	Activo      bool `json:"activo"`
 }
 
 type Categoria struct {
-	id_categoria int `json:"id_categoria"`
-	nombre       string `json:"nombre"`
+	Id_categoria int `json:"id_categoria"`
+	Nombre       string `json:"nombre"`
 }
 
 type Proveedor struct {
-	id_proveedor int `json:"id_proveedor"`
-	nombre        string `json:"nombre"`
-	telefono      *string `json:"telefono"`
-	correo        *string `json:"correo"`
-	activo        bool `json:"activo"`
+	Id_proveedor int `json:"id_proveedor"`
+	Nombre        string `json:"nombre"`
+	Telefono      *string `json:"telefono"`
+	Correo        *string `json:"correo"`
+	Activo        bool `json:"activo"`
 }
 
 type Compra struct {
-	id_compra   int `json:"id_compra"`
-	fecha       string `json:"fecha"`
-	total       float64 `json:"total"`
-	metodo_pago *string `json:"metodo_pago"`
-	estado 		*string `json:"estado"`
-	num_factura string `json:"num_factura"`
-	id_cliente 	int `json:"id_cliente"`
-	id_empleado int `json:"id_empleado"`
-}
-
-type DetalleCompra struct {
-	id_compra 		int `json:"id_compra"`
-	id_producto 	int `json:"id_producto"`
-	cantidad 		int `json:"cantidad"`
-	precio_unitario float64 `json:"precio_unitario"`
-	sub_total       float64 `json:"sub_total"`	
-
+	Id_compra   int `json:"id_compra"`
+	Fecha       string `json:"fecha"`
+	Total       float64 `json:"total"`
+	Metodo_pago *string `json:"metodo_pago"`
+	Estado      *string `json:"estado"`
+	Num_factura string `json:"num_factura"`
+	Id_cliente 	int `json:"id_cliente"`
+	Id_empleado int `json:"id_empleado"`
 }
 
 type Producto struct {
@@ -59,4 +50,76 @@ type Producto struct {
 	Activo           bool     `json:"activo"`
     IDCategoria      int      `json:"id_categoria"`
     IDProveedor      int      `json:"id_proveedor"`
+}
+
+type ItemCompra struct {
+    IDProducto int `json:"id_producto"`
+    Cantidad   int `json:"cantidad"`
+}
+
+type CompraRequest struct {
+    Fecha      string       `json:"fecha"`
+    MetodoPago string       `json:"metodo_pago"`
+    IDCliente  int          `json:"id_cliente"`
+    IDEmpleado int          `json:"id_empleado"`
+    Productos  []ItemCompra `json:"productos"`
+}
+
+type ItemDetalle struct {
+    Producto       string  `json:"producto"`
+    Cantidad       int     `json:"cantidad"`
+    PrecioUnitario float64 `json:"precio_unitario"`
+    SubTotal       float64 `json:"sub_total"`
+}
+
+type CompraDetalle struct {
+    IDCompra   int           `json:"id_compra"`
+    Fecha      string        `json:"fecha"`
+    Total      float64       `json:"total"`
+    MetodoPago *string       `json:"metodo_pago"`
+    Estado     *string       `json:"estado"`
+    NumFactura string        `json:"num_factura"`
+    Cliente    string        `json:"cliente"`    
+    Empleado   string        `json:"empleado"`   
+    Productos  []ItemDetalle `json:"productos"`  
+}
+
+type AuditoriaVenta struct {
+    IDCompra      int     `json:"id_compra"`
+    NumFactura    string  `json:"num_factura"`
+    Fecha         string  `json:"fecha"`
+    MetodoPago    *string `json:"metodo_pago"`
+    Estado        *string `json:"estado"`
+    Total         float64 `json:"total"`
+    Cliente       string  `json:"cliente"`
+    CorreoCliente *string `json:"correo_cliente"`
+    EmpleadoCajero string `json:"empleado_cajero"`
+}
+
+type RentabilidadProducto struct {
+    IDProducto          int     `json:"id_producto"`
+    Producto            string  `json:"producto"`
+    Categoria           string  `json:"categoria"`
+    UnidadesVendidas    int     `json:"unidades_vendidas"`
+    IngresosTotales     float64 `json:"ingresos_totales"`
+    PrecioPromedioVenta float64 `json:"precio_promedio_venta"`
+}
+
+type StockCritico struct {
+    IDProducto        int     `json:"id_producto"`
+    Producto          string  `json:"producto"`
+    Categoria         string  `json:"categoria"`
+    Proveedor         string  `json:"proveedor"`
+    TelefonoProveedor *string `json:"telefono_proveedor"`
+    StockActual       int     `json:"stock_actual"`
+    FechaVencimiento  *string `json:"fecha_vencimiento"`
+}
+
+type DesempenoEmpleado struct {
+    IDEmpleado          int     `json:"id_empleado"`
+    Empleado            string  `json:"empleado"`
+    TotalTransacciones  int     `json:"total_transacciones"`
+    MontoTotalVendido   float64 `json:"monto_total_vendido"`
+    TicketPromedio      float64 `json:"ticket_promedio"`
+    UltimaVenta         *string `json:"ultima_venta"`
 }

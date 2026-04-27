@@ -3,6 +3,8 @@ package main
 import (
     "encoding/json"
     "net/http"
+	"fmt"
+	"time"
 )
 
 // Estructura estandar para todas las respuestas del API.
@@ -17,10 +19,14 @@ func RespondJSON(w http.ResponseWriter, status int, mensaje string, data interfa
 
     w.Header().Set("Content-Type", "application/json")
     w.WriteHeader(status)
-	
+
     json.NewEncoder(w).Encode(Respuesta{
         Status:  status,
         Mensaje: mensaje,
         Data:    data,
     })
+}
+
+func generarNumFactura() string {
+	return fmt.Sprintf("FAC-%s", time.Now().Format("20060102-150405"))
 }
