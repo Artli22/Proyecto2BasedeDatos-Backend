@@ -3,6 +3,7 @@ package main
 import (
     "database/sql"
     "fmt"
+	"log" 
     "os"
 
     _ "github.com/lib/pq"
@@ -10,7 +11,7 @@ import (
 
 var DB *sql.DB
 
-func Connect() error {
+func conectarDB(){
     connStr := fmt.Sprintf(
         "host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
         os.Getenv("DB_HOST"),
@@ -23,8 +24,12 @@ func Connect() error {
     var err error
     DB, err = sql.Open("postgres", connStr)
     if err != nil {
-        return err
+        log.Fatal("Error al configurar la conexion:", err)
     }
 
-    return DB.Ping()
+	if err = DB.Ping(); err != nil {
+		log.Fatal("Error al conectar a la base de datos:", err)
+	}
+
+    fmt.Println("Conexion a la base de datos exitosa")
 }
