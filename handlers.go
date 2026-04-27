@@ -172,3 +172,396 @@ func eliminarProducto(w http.ResponseWriter, r *http.Request) {
 
 	RespondJSON(w, http.StatusOK, "Producto desactivado correctamente", nil)
 }
+
+// Handler para traer todos los clientes 
+func getClientes(w http.ResponseWriter, r *http.Request) {
+	rows, err := DB.Query(`
+		SELECT id_cliente, nombre, telefono, correo, 
+		 activo
+		FROM cliente WHERE activo = TRUE
+	`)
+	if err != nil {
+		RespondJSON(w, http.StatusInternalServerError,
+			"Error al consultar clientes en la base de datos", nil)
+		return
+	}
+	defer rows.Close()
+
+	clientes := []Cliente{}
+	for rows.Next() {
+		var c Cliente
+		err := rows.Scan(
+			&c.id_cliente, &c.nombre, &c.telefono, &c.correo, &c.activo,
+		)
+		if err != nil {
+			RespondJSON(w, http.StatusInternalServerError,
+				"Error al leer fila de cliente", nil)
+			return
+		}
+		clientes = append(clientes, c)
+	}
+
+	RespondJSON(w, http.StatusOK, "Clientes obtenidos correctamente", clientes)
+}
+
+// Handler para traer un cliente por ID 
+func getClientePorID(w http.ResponseWriter, r *http.Request) {
+	idStr := r.URL.Query().Get("id")
+	if idStr == "" {
+		RespondJSON(w, http.StatusBadRequest,
+			"Falta el parametro id de cliente", nil)
+		return
+	}
+
+	var c Cliente
+	err := DB.QueryRow(`
+		SELECT id_cliente, nombre, telefono, correo, activo
+		FROM cliente WHERE id_cliente = $1 AND activo = TRUE
+	`, idStr).Scan(
+		&c.IDCliente, &c.Nombre, &c.Telefono,
+		&c.Correo, &c.Activo,
+	)
+
+	if err == sql.ErrNoRows {
+		RespondJSON(w, http.StatusNotFound,
+			"Cliente no encontrado", nil)
+		return
+	}
+	if err != nil {
+		RespondJSON(w, http.StatusInternalServerError,
+			"Error al consultar cliente", nil)
+		return
+	}
+
+	RespondJSON(w, http.StatusOK, "Cliente obtenido correctamente", c)
+}
+
+// Handler para actualizar un cliente 
+func actualizarCliente(w http.ResponseWriter, r *http.Request) {
+	idStr := r.URL.Query().Get("id")
+	if idStr == "" {
+		RespondJSON(w, http.StatusBadRequest,
+			"Falta el parametro id de cliente", nil)
+		return
+	}
+
+	var c Cliente
+	if err := json.NewDecoder(r.Body).Decode(&c); err != nil {
+		RespondJSON(w, http.StatusBadRequest,
+			"El cuerpo del request no es un JSON valido", nil)
+		return
+	}
+
+	result, err := DB.Exec(`
+		UPDATE cliente 
+		SET nombre=$1, telefono=$2, correo=$3, activo=$4
+		WHERE id_cliente=$5 AND activo = TRUE
+	`,
+		c.Nombre, c.Telefono, c.Correo, c.Activo, idStr,
+	)
+	if err != nil {
+		RespondJSON(w, http.StatusInternalServerError,
+			"Error al actualizar cliente en la base de datos", nil)
+		return
+	}
+
+	rowsAfectadas, _ := result.RowsAffected()
+	if rowsAfectadas == 0 {
+		RespondJSON(w, http.StatusNotFound,
+			"Cliente no encontrado o se encuentra desactivado", nil)
+		return
+	}
+
+	RespondJSON(w, http.StatusOK, "Cliente actualizado correctamente", nil)
+}
+
+// Handler para eliminar un cliente (desactivarlo)
+func eliminarCliente(w http.ResponseWriter, r *http.Request) {
+	idStr := r.URL.Query().Get("id")
+	if idStr == "" {
+		RespondJSON(w, http.StatusBadRequest,
+			"Falta el parametro id de cliente", nil)
+		return
+	}
+
+	result, err := DB.Exec(
+		"UPDATE cliente SET activo = FALSE WHERE id_cliente = $1 AND activo = TRUE",
+		idStr,
+	)
+	if err != nil {
+		RespondJSON(w, http.StatusInternalServerError,
+			"Error al desactivar cliente", nil)
+		return
+	}
+
+	rowsAfectadas, _ := result.RowsAffected()
+	if rowsAfectadas == 0 {
+		RespondJSON(w, http.StatusNotFound,
+			"Cliente no encontrado o ya se encuentra desactivado", nil)
+		return
+	}
+
+	RespondJSON(w, http.StatusOK, "Cliente desactivado correctamente", nil)
+}
+
+// Handler para traer todos los empleados
+func getEmpleados(w http.ResponseWriter, r *http.Request) {
+	rows, err := DB.Query(`
+		SELECT id_empleado, nombre, telefono, correo, 
+		 activo
+		FROM empleado WHERE activo = TRUE
+	`)
+	if err != nil {
+		RespondJSON(w, http.StatusInternalServerError,
+			"Error al consultar empleados en la base de datos", nil)
+		return
+	}
+	defer rows.Close()
+
+	empleados := []Empleado{}
+	for rows.Next() {
+		var e Empleado
+		err := rows.Scan(
+			&e.id_empleado, &e.nombre, &e.telefono, &e.correo, &e.activo,
+		)
+		if err != nil {
+			RespondJSON(w, http.StatusInternalServerError,
+				"Error al leer fila de empleado", nil)
+			return
+		}
+		empleados = append(empleados, e)
+	}
+
+	RespondJSON(w, http.StatusOK, "Empleados obtenidos correctamente", empleados)
+}
+
+// Handler para traer un empleado por ID 
+func getEmpleadoPorID(w http.ResponseWriter, r *http.Request) {
+	idStr := r.URL.Query().Get("id")
+	if idStr == "" {
+		RespondJSON(w, http.StatusBadRequest,
+			"Falta el parametro id de empleado", nil)
+		return
+	}
+
+	var e Empleado
+	err := DB.QueryRow(`
+		SELECT id_empleado, nombre, telefono, correo, activo
+		FROM empleado WHERE id_empleado = $1 AND activo = TRUE
+	`, idStr).Scan(
+		&e.IDEmpleado, &e.Nombre, &e.Telefono,
+		&e.Correo, &e.Activo,
+	)
+
+	if err == sql.ErrNoRows {
+		RespondJSON(w, http.StatusNotFound,
+			"Empleado no encontrado", nil)
+		return
+	}
+	if err != nil {
+		RespondJSON(w, http.StatusInternalServerError,
+			"Error al consultar empleado", nil)
+		return
+	}
+
+	RespondJSON(w, http.StatusOK, "Empleado obtenido correctamente", e)
+}
+
+// Handler para actualizar un empleado
+func actualizarEmpleado(w http.ResponseWriter, r *http.Request) {
+	idStr := r.URL.Query().Get("id")
+	if idStr == "" {
+		RespondJSON(w, http.StatusBadRequest,
+			"Falta el parametro id de empleado", nil)
+		return
+	}
+
+	var e Empleado
+	if err := json.NewDecoder(r.Body).Decode(&e); err != nil {
+		RespondJSON(w, http.StatusBadRequest,
+			"El cuerpo del request no es un JSON valido", nil)
+		return
+	}
+
+	result, err := DB.Exec(`
+		UPDATE empleado 
+		SET nombre=$1, telefono=$2, correo=$3, activo=$4
+		WHERE id_empleado=$5 AND activo = TRUE
+	`,
+		e.Nombre, e.Telefono, e.Correo, e.Activo, idStr,
+	)
+	if err != nil {
+		RespondJSON(w, http.StatusInternalServerError,
+			"Error al actualizar empleado en la base de datos", nil)
+		return
+	}
+
+	rowsAfectadas, _ := result.RowsAffected()
+	if rowsAfectadas == 0 {
+		RespondJSON(w, http.StatusNotFound,
+			"Empleado no encontrado o se encuentra desactivado", nil)
+		return
+	}
+
+	RespondJSON(w, http.StatusOK, "Empleado actualizado correctamente", nil)
+}
+
+// Handler para eliminar un empleado (desactivarlo)
+func eliminarEmpleado(w http.ResponseWriter, r *http.Request) {
+	idStr := r.URL.Query().Get("id")
+	if idStr == "" {
+		RespondJSON(w, http.StatusBadRequest,
+			"Falta el parametro id de empleado", nil)
+		return
+	}
+
+	result, err := DB.Exec(
+		"UPDATE empleado SET activo = FALSE WHERE id_empleado = $1 AND activo = TRUE",
+		idStr,
+	)
+	if err != nil {
+		RespondJSON(w, http.StatusInternalServerError,
+			"Error al desactivar empleado", nil)
+		return
+	}
+
+	rowsAfectadas, _ := result.RowsAffected()
+	if rowsAfectadas == 0 {
+		RespondJSON(w, http.StatusNotFound,
+			"Empleado no encontrado o ya se encuentra desactivado", nil)
+		return
+	}
+
+	RespondJSON(w, http.StatusOK, "Empleado desactivado correctamente", nil)
+}
+
+// Handler para traer todos los proveedores 
+func getProveedores(w http.ResponseWriter, r *http.Request) {
+	rows, err := DB.Query(`
+		SELECT id_proveedor, nombre, telefono, correo, 
+		 activo
+		FROM proveedor WHERE activo = TRUE
+	`)
+	if err != nil {
+		RespondJSON(w, http.StatusInternalServerError,
+			"Error al consultar proveedores en la base de datos", nil)
+		return
+	}
+	defer rows.Close()
+
+	proveedores := []Proveedor{}
+	for rows.Next() {
+		var p Proveedor
+		err := rows.Scan(
+			&p.id_proveedor, &p.nombre, &p.telefono, &p.correo, &p.activo,
+		)
+		if err != nil {
+			RespondJSON(w, http.StatusInternalServerError,
+				"Error al leer fila de proveedor", nil)
+			return
+		}
+		proveedores = append(proveedores, p)
+	}
+
+	RespondJSON(w, http.StatusOK, "Proveedores obtenidos correctamente", proveedores)
+}
+
+// Handler para traer un proveedor por ID
+func getProveedorPorID(w http.ResponseWriter, r *http.Request) {
+	idStr := r.URL.Query().Get("id")
+	if idStr == "" {
+		RespondJSON(w, http.StatusBadRequest,
+			"Falta el parametro id de proveedor", nil)
+		return
+	}
+
+	var p Proveedor
+	err := DB.QueryRow(`
+		SELECT id_proveedor, nombre, telefono, correo, activo
+		FROM proveedor WHERE id_proveedor = $1 AND activo = TRUE
+	`, idStr).Scan(
+		&p.IDProveedor, &p.Nombre, &p.Telefono,
+		&p.Correo, &p.Activo,
+	)
+
+	if err == sql.ErrNoRows {
+		RespondJSON(w, http.StatusNotFound,
+			"Proveedor no encontrado", nil)
+		return
+	}
+	if err != nil {
+		RespondJSON(w, http.StatusInternalServerError,
+			"Error al consultar proveedor", nil)
+		return
+	}
+
+	RespondJSON(w, http.StatusOK, "Proveedor obtenido correctamente", p)
+}
+
+// Handler para actualizar un proveedor
+func actualizarProveedor(w http.ResponseWriter, r *http.Request) {
+	idStr := r.URL.Query().Get("id")
+	if idStr == "" {
+		RespondJSON(w, http.StatusBadRequest,
+			"Falta el parametro id de proveedor", nil)
+		return
+	}
+
+	var p Proveedor
+	if err := json.NewDecoder(r.Body).Decode(&p); err != nil {
+		RespondJSON(w, http.StatusBadRequest,
+			"El cuerpo del request no es un JSON valido", nil)
+		return
+	}
+
+	result, err := DB.Exec(`
+		UPDATE proveedor 
+		SET nombre=$1, telefono=$2, correo=$3, activo=$4
+		WHERE id_proveedor=$5 AND activo = TRUE
+	`,
+		p.Nombre, p.Telefono, p.Correo, p.Activo, idStr,
+	)
+	if err != nil {
+		RespondJSON(w, http.StatusInternalServerError,
+			"Error al actualizar proveedor en la base de datos", nil)
+		return
+	}
+
+	rowsAfectadas, _ := result.RowsAffected()
+	if rowsAfectadas == 0 {
+		RespondJSON(w, http.StatusNotFound,
+			"Proveedor no encontrado o se encuentra desactivado", nil)
+		return
+	}
+
+	RespondJSON(w, http.StatusOK, "Proveedor actualizado correctamente", nil)
+}
+
+// Handler para eliminar un proveedor (desactivarlo)
+func eliminarProveedor(w http.ResponseWriter, r *http.Request) {
+	idStr := r.URL.Query().Get("id")
+	if idStr == "" {
+		RespondJSON(w, http.StatusBadRequest,
+			"Falta el parametro id de proveedor", nil)
+		return
+	}
+
+	result, err := DB.Exec(
+		"UPDATE proveedor SET activo = FALSE WHERE id_proveedor = $1 AND activo = TRUE",
+		idStr,
+	)
+	if err != nil {
+		RespondJSON(w, http.StatusInternalServerError,
+			"Error al desactivar proveedor", nil)
+		return
+	}
+
+	rowsAfectadas, _ := result.RowsAffected()
+	if rowsAfectadas == 0 {
+		RespondJSON(w, http.StatusNotFound,
+			"Proveedor no encontrado o ya se encuentra desactivado", nil)
+		return
+	}
+
+	RespondJSON(w, http.StatusOK, "Proveedor desactivado correctamente", nil)
+}
