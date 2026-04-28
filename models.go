@@ -96,6 +96,13 @@ type AuditoriaVenta struct {
     EmpleadoCajero string `json:"empleado_cajero"`
 }
 
+type DetalleTemp struct {
+    IDProducto     int
+    Cantidad       int
+    PrecioUnitario float64
+    SubTotal       float64
+}
+
 type RentabilidadProducto struct {
     IDProducto          int     `json:"id_producto"`
     Producto            string  `json:"producto"`

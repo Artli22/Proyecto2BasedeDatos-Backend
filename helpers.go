@@ -8,7 +8,6 @@ import (
 	"time"
 )
 
-// Estructura para respuestas JSON 
 type Respuesta struct {
 	Status  int         `json:"status"`
 	Mensaje string      `json:"mensaje"`
@@ -17,7 +16,6 @@ type Respuesta struct {
 
 
 const (
-	// Mensajes de validación
 	MsgIDFaltante            = "Falta el parametro id"
 	MsgJSONInvalido          = "El cuerpo del request no es un JSON valido"
 	MsgNoEncontrado          = "no encontrado"
@@ -31,7 +29,6 @@ const (
 	MsgErrorTransaccion      = "Error al confirmar transaccion"
 	MsgErrorRollback         = "se hizo rollback"
 
-	// Mensajes de éxito
 	MsgObtenidoCorrectamente = "obtenido correctamente"
 	MsgObtenidosCorrectamente = "obtenidos correctamente"
 	MsgCreadoCorrectamente   = "creado correctamente"
@@ -39,7 +36,7 @@ const (
 	MsgDesactivadoCorrectamente = "desactivado correctamente"
 )
 
-// RespondJSON escribe una respuesta JSON en el ResponseWriter.
+// Escribe una respuesta JSON en el ResponseWriter.
 func RespondJSON(w http.ResponseWriter, status int, mensaje string, data interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
@@ -157,13 +154,15 @@ func ObtenerProductoPorID(idStr string) (*Producto, error) {
 }
 
 // Obtiencion del precio actual de un producto
-func ObtenerPrecioProducto(tx *sql.Tx, idProducto int) (float64, error) {
+func ObtenerPrecioProducto(tx *sql.Tx, idProducto int) (float64, int, error) {
 	var precio float64
+	var stock int 
+
 	err := tx.QueryRow(
-		"SELECT precio_actual FROM producto WHERE id_producto = $1 AND activo = TRUE",
+		"SELECT precio_actual, stock FROM producto WHERE id_producto = $1 AND activo = TRUE",
 		idProducto,
-	).Scan(&precio)
-	return precio, err
+	).Scan(&precio, &stock)
+	return precio, stock, err
 }
 
 // Obtiencion de un cliente por ID
@@ -224,7 +223,7 @@ func ObtenerCategoriaPorID(idStr string) (*Categoria, error) {
 	return &c, nil
 }
 
-// generarNumFactura genera un número de factura único basado en la fecha/hora
+// Genera un número de factura único basado en la fecha/hora
 func generarNumFactura() string {
 	return fmt.Sprintf("FAC-%s", time.Now().Format("20060102-150405"))
 }

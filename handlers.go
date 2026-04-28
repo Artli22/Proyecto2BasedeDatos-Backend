@@ -585,18 +585,6 @@ func getCompraPorID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	type CompraDetalle struct {
-		IDCompra   int           `json:"id_compra"`
-		Fecha      string        `json:"fecha"`
-		Total      float64       `json:"total"`
-		MetodoPago *string       `json:"metodo_pago"`
-		Estado     *string       `json:"estado"`
-		NumFactura string        `json:"num_factura"`
-		Cliente    string        `json:"cliente"`
-		Empleado   string        `json:"empleado"`
-		Productos  []ItemDetalle `json:"productos"`
-	}
-
 	var c CompraDetalle
 	err := DB.QueryRow(`
 		SELECT c.id_compra, c.fecha, c.total, c.metodo_pago, c.estado, c.num_factura,
@@ -661,37 +649,55 @@ func crearCompra(w http.ResponseWriter, r *http.Request) {
 
 // Helper para procesar compra dentro de transacción
 func procesarNuevaCompra(tx *sql.Tx, req CompraRequest) (interface{}, error) {
-	type detalleTemp struct {
-		idProducto     int
-		cantidad       int
-		precioUnitario float64
-		subTotal       float64
-	}
-
 	var total float64
-	var detalles []detalleTemp
+	var detalles []DetalleTemp
 
-	// Calcular precios y validar productos
-	for _, item := range req.Productos {
-		precio, err := ObtenerPrecioProducto(tx, item.IDProducto)
-		if err == sql.ErrNoRows {
-			return nil, fmt.Errorf("Producto no encontrado o inactivo")
-		}
-		if err != nil {
-			return nil, fmt.Errorf("Error al consultar precio de producto")
-		}
-
-		subTotal := precio * float64(item.Cantidad)
-		total += subTotal
-		detalles = append(detalles, detalleTemp{
-			idProducto:     item.IDProducto,
-			cantidad:       item.Cantidad,
-			precioUnitario: precio,
-			subTotal:       subTotal,
-		})
+	if len(req.Productos) == 0 {
+	 return nil, fmt.Errorf("La compra debe incluir al menos un producto")
 	}
 
-	// Insertar compra
+	for _, item := range req.Productos {
+		if item.Cantidad <= 0 {
+			return nil, fmt.Errorf(
+				"La cantidad del producto %d debe ser mayor a 0",
+				item.IDProducto,
+			)
+		}
+
+		precio, stock, err := ObtenerPrecioProducto(tx, item.IDProducto)
+
+		if err == sql.ErrNoRows {
+			return nil, fmt.Errorf(
+				"Producto %d no encontrado o inactivo",
+				item.IDProducto,
+			)
+		}
+
+		if err != nil {
+			return nil, fmt.Errorf(
+				"Error al consultar producto %d",
+				item.IDProducto,
+			)
+		}
+
+		if stock < item.Cantidad {
+			return nil, fmt.Errorf(
+				"Stock insuficiente para producto %d. Disponible: %d, solicitado: %d",
+				item.IDProducto,
+				stock,
+				item.Cantidad,
+			)
+		}
+
+		detalles = append(detalles, DetalleTemp{
+			IDProducto:     item.IDProducto,
+			Cantidad:       item.Cantidad,
+			PrecioUnitario: precio,
+			SubTotal:       precio * float64(item.Cantidad),
+		})
+		total += precio * float64(item.Cantidad)
+	}
+	
 	var idCompra int
 	err := tx.QueryRow(`
 		INSERT INTO compra (fecha, total, metodo_pago, estado, num_factura, id_cliente, id_empleado)
@@ -707,25 +713,35 @@ func procesarNuevaCompra(tx *sql.Tx, req CompraRequest) (interface{}, error) {
 		return nil, fmt.Errorf("Error al registrar compra")
 	}
 
-	// Insertar detalles y actualizar stock
 	for _, d := range detalles {
 		_, err = tx.Exec(`
 			INSERT INTO detalle_compra (id_compra, id_producto, cantidad, precio_unitario, sub_total)
 			VALUES ($1, $2, $3, $4, $5)
-		`, idCompra, d.idProducto, d.cantidad, d.precioUnitario, d.subTotal)
+		`, idCompra, d.IDProducto, d.Cantidad, d.PrecioUnitario, d.SubTotal)
 
 		if err != nil {
 			return nil, fmt.Errorf("Error al registrar detalle de compra")
 		}
 
-		_, err = tx.Exec(`
+		result, err := tx.Exec(`
 			UPDATE producto SET stock = stock - $1
 			WHERE id_producto = $2
-		`, d.cantidad, d.idProducto)
+			 AND activo = TRUE
+	  		 AND stock >= $1
+		`, d.Cantidad, d.IDProducto)
 
 		if err != nil {
 			return nil, fmt.Errorf("Error al actualizar stock")
 		}
+
+		rowsAffected, _ := result.RowsAffected()
+		if rowsAffected == 0 {
+			return nil, fmt.Errorf(
+				"Stock insuficiente al actualizar producto %d",
+				d.IDProducto,
+			)
+		}
+		
 	}
 
 	return map[string]interface{}{
@@ -741,20 +757,73 @@ func cancelarCompra(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result, err := DB.Exec(`
-		UPDATE compra SET estado = 'cancelado'
-		WHERE id_compra = $1 AND estado = 'completado'
+	resultado, ok := EjecutarEnTransaccion(w, func(tx *sql.Tx) (interface{}, error) {
+		return procesarCancelacionCompra(tx, idStr)
+	})
+
+	if !ok {
+		return
+	}
+
+	RespondJSON(w, http.StatusOK, "Compra cancelada correctamente y stock restaurado", resultado)
+}
+
+func procesarCancelacionCompra(tx *sql.Tx, idStr string) (interface{}, error) {
+	result, err := tx.Exec(`
+		UPDATE compra 
+		SET estado = 'cancelado'
+		WHERE id_compra = $1 
+		  AND estado = 'completado'
 	`, idStr)
 
-	if ManejarErrorInsertActualizar(err, w, "update", "compra") {
-		return
+	if err != nil {
+		return nil, fmt.Errorf("Error al cancelar compra")
 	}
 
-	if !ValidarFilasAfectadas(result, w, "Compra") {
-		return
+	rowsAffected, _ := result.RowsAffected()
+	if rowsAffected == 0 {
+		return nil, fmt.Errorf("Compra no encontrada o ya cancelada")
 	}
 
-	RespondJSON(w, http.StatusOK, fmt.Sprintf("Compra %s", MsgCreadoCorrectamente), nil)
+	rows, err := tx.Query(`
+		SELECT id_producto, cantidad
+		FROM detalle_compra
+		WHERE id_compra = $1
+	`, idStr)
+
+	if err != nil {
+		return nil, fmt.Errorf("Error al consultar detalle de compra")
+	}
+	defer rows.Close()
+
+	productosRestaurados := 0
+
+	for rows.Next() {
+		var idProducto int
+		var cantidad int
+
+		if err := rows.Scan(&idProducto, &cantidad); err != nil {
+			return nil, fmt.Errorf("Error al leer detalle de compra")
+		}
+
+		_, err = tx.Exec(`
+			UPDATE producto
+			SET stock = stock + $1
+			WHERE id_producto = $2
+		`, cantidad, idProducto)
+
+		if err != nil {
+			return nil, fmt.Errorf("Error al restaurar stock del producto %d", idProducto)
+		}
+
+		productosRestaurados++
+	}
+
+	return map[string]interface{}{
+		"id_compra":              idStr,
+		"productos_restaurados":  productosRestaurados,
+		"estado":                 "cancelado",
+	}, nil
 }
 
 // Handler para vista de auditoria de ventas
