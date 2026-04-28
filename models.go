@@ -1,6 +1,6 @@
 package main 
 type Cliente struct {
-	Id_cliente int `json:"id_cliente"`
+	IdCliente int `json:"id_cliente"`
 	Nombre 	   string `json:"nombre"`
 	Telefono   *string `json:"telefono"`
 	Correo     *string `json:"correo"`
@@ -8,7 +8,7 @@ type Cliente struct {
 }
 
 type Empleado struct {
-	Id_empleado int `json:"id_empleado"`
+	IdEmpleado int `json:"id_empleado"`
 	Nombre      string `json:"nombre"`
 	Telefono    *string `json:"telefono"`
 	Correo      *string `json:"correo"`
@@ -16,12 +16,12 @@ type Empleado struct {
 }
 
 type Categoria struct {
-	Id_categoria int `json:"id_categoria"`
+	IdCategoria int `json:"id_categoria"`
 	Nombre       string `json:"nombre"`
 }
 
 type Proveedor struct {
-	Id_proveedor int `json:"id_proveedor"`
+	IDProveedor int `json:"id_proveedor"`
 	Nombre        string `json:"nombre"`
 	Telefono      *string `json:"telefono"`
 	Correo        *string `json:"correo"`
@@ -29,14 +29,14 @@ type Proveedor struct {
 }
 
 type Compra struct {
-	Id_compra   int `json:"id_compra"`
+	IDCompra   int `json:"id_compra"`
 	Fecha       string `json:"fecha"`
 	Total       float64 `json:"total"`
-	Metodo_pago *string `json:"metodo_pago"`
+	MetodoPago *string `json:"metodo_pago"`
 	Estado      *string `json:"estado"`
-	Num_factura string `json:"num_factura"`
-	Id_cliente 	int `json:"id_cliente"`
-	Id_empleado int `json:"id_empleado"`
+	NumFactura string `json:"num_factura"`
+	IDCliente 	int `json:"id_cliente"`
+	IDEmpleado int `json:"id_empleado"`
 }
 
 type Producto struct {

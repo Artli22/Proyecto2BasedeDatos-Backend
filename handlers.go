@@ -4,6 +4,7 @@ package main
 import (
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"net/http"
 )
 
@@ -42,44 +43,23 @@ func getProductos(w http.ResponseWriter, r *http.Request) {
 
 // Handler para traer un producto por ID
 func getProductoPorID(w http.ResponseWriter, r *http.Request) {
-	idStr := r.URL.Query().Get("id")
-	if idStr == "" {
-		RespondJSON(w, http.StatusBadRequest,
-			"Falta el parametro id de producto", nil)
+	idStr, ok := ValidarIDParametro(r, w, "producto")
+	if !ok {
 		return
 	}
 
-	var p Producto
-	err := DB.QueryRow(`
-		SELECT id_producto, nombre, descripcion, precio_actual,
-		fecha_vencimiento, imagen, stock, activo, id_categoria, id_proveedor
-		FROM producto WHERE id_producto = $1 AND activo = TRUE
-	`, idStr).Scan(
-		&p.IDProducto, &p.Nombre, &p.Descripcion,
-		&p.PrecioActual, &p.FechaVencimiento, &p.Imagen,
-		&p.Stock, &p.Activo, &p.IDCategoria, &p.IDProveedor,
-	)
-
-	if err == sql.ErrNoRows {
-		RespondJSON(w, http.StatusNotFound,
-			"Producto no encontrado", nil)
-		return
-	}
-	if err != nil {
-		RespondJSON(w, http.StatusInternalServerError,
-			"Error al consultar producto", nil)
+	p, err := ObtenerProductoPorID(idStr)
+	if ManejarErrorConsulta(err, w, "Producto") {
 		return
 	}
 
-	RespondJSON(w, http.StatusOK, "Producto obtenido correctamente", p)
+	RespondJSON(w, http.StatusOK, fmt.Sprintf("Producto %s", MsgObtenidoCorrectamente), p)
 }
 
 // Handler para crear un producto
 func crearProducto(w http.ResponseWriter, r *http.Request) {
 	var p Producto
-	if err := json.NewDecoder(r.Body).Decode(&p); err != nil {
-		RespondJSON(w, http.StatusBadRequest,
-			"El cuerpo del request no es un JSON valido", nil)
+	if !ValidarJSONDecodificacion(json.NewDecoder(r.Body).Decode(&p), w) {
 		return
 	}
 
@@ -93,28 +73,22 @@ func crearProducto(w http.ResponseWriter, r *http.Request) {
 		p.IDCategoria, p.IDProveedor,
 	).Scan(&p.IDProducto)
 
-	if err != nil {
-		RespondJSON(w, http.StatusInternalServerError,
-			"Error al insertar producto, verifique que id_categoria e id_proveedor existan", nil)
+	if ManejarErrorInsertActualizar(err, w, "insert", "producto") {
 		return
 	}
 
-	RespondJSON(w, http.StatusCreated, "Producto creado correctamente", p)
+	RespondJSON(w, http.StatusCreated, fmt.Sprintf("Producto %s", MsgCreadoCorrectamente), p)
 }
 
 // Handler para actualizar un producto
 func actualizarProducto(w http.ResponseWriter, r *http.Request) {
-	idStr := r.URL.Query().Get("id")
-	if idStr == "" {
-		RespondJSON(w, http.StatusBadRequest,
-			"Falta el parametro id de producto", nil)
+	idStr, ok := ValidarIDParametro(r, w, "producto")
+	if !ok {
 		return
 	}
 
 	var p Producto
-	if err := json.NewDecoder(r.Body).Decode(&p); err != nil {
-		RespondJSON(w, http.StatusBadRequest,
-			"El cuerpo del request no es un JSON valido", nil)
+	if !ValidarJSONDecodificacion(json.NewDecoder(r.Body).Decode(&p), w) {
 		return
 	}
 
@@ -128,28 +102,22 @@ func actualizarProducto(w http.ResponseWriter, r *http.Request) {
 		p.FechaVencimiento, p.Imagen, p.Stock,
 		p.IDCategoria, p.IDProveedor, idStr,
 	)
-	if err != nil {
-		RespondJSON(w, http.StatusInternalServerError,
-			"Error al actualizar producto en la base de datos", nil)
+
+	if ManejarErrorInsertActualizar(err, w, "update", "producto") {
 		return
 	}
 
-	rowsAfectadas, _ := result.RowsAffected()
-	if rowsAfectadas == 0 {
-		RespondJSON(w, http.StatusNotFound,
-			"Producto no encontrado o se encuentra desactivado", nil)
+	if !ValidarFilasAfectadas(result, w, "Producto") {
 		return
 	}
 
-	RespondJSON(w, http.StatusOK, "Producto actualizado correctamente", nil)
+	RespondJSON(w, http.StatusOK, fmt.Sprintf("Producto %s", MsgActualizadoCorrectamente), nil)
 }
 
 // Handler para eliminar un producto (desactivarlo)
 func eliminarProducto(w http.ResponseWriter, r *http.Request) {
-	idStr := r.URL.Query().Get("id")
-	if idStr == "" {
-		RespondJSON(w, http.StatusBadRequest,
-			"Falta el parametro id de producto", nil)
+	idStr, ok := ValidarIDParametro(r, w, "producto")
+	if !ok {
 		return
 	}
 
@@ -157,20 +125,16 @@ func eliminarProducto(w http.ResponseWriter, r *http.Request) {
 		"UPDATE producto SET activo = FALSE WHERE id_producto = $1 AND activo = TRUE",
 		idStr,
 	)
-	if err != nil {
-		RespondJSON(w, http.StatusInternalServerError,
-			"Error al desactivar producto", nil)
+
+	if ManejarErrorInsertActualizar(err, w, "delete", "producto") {
 		return
 	}
 
-	rowsAfectadas, _ := result.RowsAffected()
-	if rowsAfectadas == 0 {
-		RespondJSON(w, http.StatusNotFound,
-			"Producto no encontrado o ya se encuentra desactivado", nil)
+	if !ValidarFilasAfectadas(result, w, "Producto") {
 		return
 	}
 
-	RespondJSON(w, http.StatusOK, "Producto desactivado correctamente", nil)
+	RespondJSON(w, http.StatusOK, fmt.Sprintf("Producto %s", MsgDesactivadoCorrectamente), nil)
 }
 
 // Handler para traer todos los clientes
@@ -190,7 +154,7 @@ func getClientes(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var c Cliente
 		err := rows.Scan(
-			&c.Id_cliente, &c.Nombre, &c.Telefono, &c.Correo, &c.Activo,
+			&c.IdCliente, &c.Nombre, &c.Telefono, &c.Correo, &c.Activo,
 		)
 		if err != nil {
 			RespondJSON(w, http.StatusInternalServerError,
@@ -205,42 +169,23 @@ func getClientes(w http.ResponseWriter, r *http.Request) {
 
 // Handler para traer un cliente por ID
 func getClientePorID(w http.ResponseWriter, r *http.Request) {
-	idStr := r.URL.Query().Get("id")
-	if idStr == "" {
-		RespondJSON(w, http.StatusBadRequest,
-			"Falta el parametro id de cliente", nil)
+	idStr, ok := ValidarIDParametro(r, w, "cliente")
+	if !ok {
 		return
 	}
 
-	var c Cliente
-	err := DB.QueryRow(`
-		SELECT id_cliente, nombre, telefono, correo, activo
-		FROM cliente WHERE id_cliente = $1 AND activo = TRUE
-	`, idStr).Scan(
-		&c.Id_cliente, &c.Nombre, &c.Telefono,
-		&c.Correo, &c.Activo,
-	)
-
-	if err == sql.ErrNoRows {
-		RespondJSON(w, http.StatusNotFound,
-			"Cliente no encontrado", nil)
-		return
-	}
-	if err != nil {
-		RespondJSON(w, http.StatusInternalServerError,
-			"Error al consultar cliente", nil)
+	c, err := ObtenerClientePorID(idStr)
+	if ManejarErrorConsulta(err, w, "Cliente") {
 		return
 	}
 
-	RespondJSON(w, http.StatusOK, "Cliente obtenido correctamente", c)
+	RespondJSON(w, http.StatusOK, fmt.Sprintf("Cliente %s", MsgObtenidoCorrectamente), c)
 }
 
 // Handler para crear un cliente
 func crearCliente(w http.ResponseWriter, r *http.Request) {
 	var c Cliente
-	if err := json.NewDecoder(r.Body).Decode(&c); err != nil {
-		RespondJSON(w, http.StatusBadRequest,
-			"El cuerpo del request no es un JSON valido", nil)
+	if !ValidarJSONDecodificacion(json.NewDecoder(r.Body).Decode(&c), w) {
 		return
 	}
 
@@ -250,30 +195,24 @@ func crearCliente(w http.ResponseWriter, r *http.Request) {
 		RETURNING id_cliente
 	`,
 		c.Nombre, c.Telefono, c.Correo,
-	).Scan(&c.Id_cliente)
+	).Scan(&c.IdCliente)
 
-	if err != nil {
-		RespondJSON(w, http.StatusInternalServerError,
-			"Error al insertar cliente", nil)
+	if ManejarErrorInsertActualizar(err, w, "insert", "cliente") {
 		return
 	}
 
-	RespondJSON(w, http.StatusCreated, "Cliente creado correctamente", c)
+	RespondJSON(w, http.StatusCreated, fmt.Sprintf("Cliente %s", MsgCreadoCorrectamente), c)
 }
 
 // Handler para actualizar un cliente
 func actualizarCliente(w http.ResponseWriter, r *http.Request) {
-	idStr := r.URL.Query().Get("id")
-	if idStr == "" {
-		RespondJSON(w, http.StatusBadRequest,
-			"Falta el parametro id de cliente", nil)
+	idStr, ok := ValidarIDParametro(r, w, "cliente")
+	if !ok {
 		return
 	}
 
 	var c Cliente
-	if err := json.NewDecoder(r.Body).Decode(&c); err != nil {
-		RespondJSON(w, http.StatusBadRequest,
-			"El cuerpo del request no es un JSON valido", nil)
+	if !ValidarJSONDecodificacion(json.NewDecoder(r.Body).Decode(&c), w) {
 		return
 	}
 
@@ -284,28 +223,22 @@ func actualizarCliente(w http.ResponseWriter, r *http.Request) {
 	`,
 		c.Nombre, c.Telefono, c.Correo, idStr,
 	)
-	if err != nil {
-		RespondJSON(w, http.StatusInternalServerError,
-			"Error al actualizar cliente en la base de datos", nil)
+
+	if ManejarErrorInsertActualizar(err, w, "update", "cliente") {
 		return
 	}
 
-	rowsAfectadas, _ := result.RowsAffected()
-	if rowsAfectadas == 0 {
-		RespondJSON(w, http.StatusNotFound,
-			"Cliente no encontrado o se encuentra desactivado", nil)
+	if !ValidarFilasAfectadas(result, w, "Cliente") {
 		return
 	}
 
-	RespondJSON(w, http.StatusOK, "Cliente actualizado correctamente", nil)
+	RespondJSON(w, http.StatusOK, fmt.Sprintf("Cliente %s", MsgActualizadoCorrectamente), nil)
 }
 
 // Handler para eliminar un cliente (desactivarlo)
 func eliminarCliente(w http.ResponseWriter, r *http.Request) {
-	idStr := r.URL.Query().Get("id")
-	if idStr == "" {
-		RespondJSON(w, http.StatusBadRequest,
-			"Falta el parametro id de cliente", nil)
+	idStr, ok := ValidarIDParametro(r, w, "cliente")
+	if !ok {
 		return
 	}
 
@@ -313,20 +246,16 @@ func eliminarCliente(w http.ResponseWriter, r *http.Request) {
 		"UPDATE cliente SET activo = FALSE WHERE id_cliente = $1 AND activo = TRUE",
 		idStr,
 	)
-	if err != nil {
-		RespondJSON(w, http.StatusInternalServerError,
-			"Error al desactivar cliente", nil)
+
+	if ManejarErrorInsertActualizar(err, w, "delete", "cliente") {
 		return
 	}
 
-	rowsAfectadas, _ := result.RowsAffected()
-	if rowsAfectadas == 0 {
-		RespondJSON(w, http.StatusNotFound,
-			"Cliente no encontrado o ya se encuentra desactivado", nil)
+	if !ValidarFilasAfectadas(result, w, "Cliente") {
 		return
 	}
 
-	RespondJSON(w, http.StatusOK, "Cliente desactivado correctamente", nil)
+	RespondJSON(w, http.StatusOK, fmt.Sprintf("Cliente %s", MsgDesactivadoCorrectamente), nil)
 }
 
 // Handler para traer todos los empleados
@@ -346,7 +275,7 @@ func getEmpleados(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var e Empleado
 		err := rows.Scan(
-			&e.Id_empleado, &e.Nombre, &e.Telefono, &e.Correo, &e.Activo,
+			&e.IdEmpleado, &e.Nombre, &e.Telefono, &e.Correo, &e.Activo,
 		)
 		if err != nil {
 			RespondJSON(w, http.StatusInternalServerError,
@@ -361,42 +290,23 @@ func getEmpleados(w http.ResponseWriter, r *http.Request) {
 
 // Handler para traer un empleado por ID
 func getEmpleadoPorID(w http.ResponseWriter, r *http.Request) {
-	idStr := r.URL.Query().Get("id")
-	if idStr == "" {
-		RespondJSON(w, http.StatusBadRequest,
-			"Falta el parametro id de empleado", nil)
+	idStr, ok := ValidarIDParametro(r, w, "empleado")
+	if !ok {
 		return
 	}
 
-	var e Empleado
-	err := DB.QueryRow(`
-		SELECT id_empleado, nombre, telefono, correo, activo
-		FROM empleado WHERE id_empleado = $1 AND activo = TRUE
-	`, idStr).Scan(
-		&e.Id_empleado, &e.Nombre, &e.Telefono,
-		&e.Correo, &e.Activo,
-	)
-
-	if err == sql.ErrNoRows {
-		RespondJSON(w, http.StatusNotFound,
-			"Empleado no encontrado", nil)
-		return
-	}
-	if err != nil {
-		RespondJSON(w, http.StatusInternalServerError,
-			"Error al consultar empleado", nil)
+	e, err := ObtenerEmpleadoPorID(idStr)
+	if ManejarErrorConsulta(err, w, "Empleado") {
 		return
 	}
 
-	RespondJSON(w, http.StatusOK, "Empleado obtenido correctamente", e)
+	RespondJSON(w, http.StatusOK, fmt.Sprintf("Empleado %s", MsgObtenidoCorrectamente), e)
 }
 
 // Handler para crear un empleado
 func crearEmpleado(w http.ResponseWriter, r *http.Request) {
 	var e Empleado
-	if err := json.NewDecoder(r.Body).Decode(&e); err != nil {
-		RespondJSON(w, http.StatusBadRequest,
-			"El cuerpo del request no es un JSON valido", nil)
+	if !ValidarJSONDecodificacion(json.NewDecoder(r.Body).Decode(&e), w) {
 		return
 	}
 
@@ -406,30 +316,24 @@ func crearEmpleado(w http.ResponseWriter, r *http.Request) {
 		RETURNING id_empleado
 	`,
 		e.Nombre, e.Telefono, e.Correo,
-	).Scan(&e.Id_empleado)
+	).Scan(&e.IdEmpleado)
 
-	if err != nil {
-		RespondJSON(w, http.StatusInternalServerError,
-			"Error al insertar empleado", nil)
+	if ManejarErrorInsertActualizar(err, w, "insert", "empleado") {
 		return
 	}
 
-	RespondJSON(w, http.StatusCreated, "Empleado creado correctamente", e)
+	RespondJSON(w, http.StatusCreated, fmt.Sprintf("Empleado %s", MsgCreadoCorrectamente), e)
 }
 
 // Handler para actualizar un empleado
 func actualizarEmpleado(w http.ResponseWriter, r *http.Request) {
-	idStr := r.URL.Query().Get("id")
-	if idStr == "" {
-		RespondJSON(w, http.StatusBadRequest,
-			"Falta el parametro id de empleado", nil)
+	idStr, ok := ValidarIDParametro(r, w, "empleado")
+	if !ok {
 		return
 	}
 
 	var e Empleado
-	if err := json.NewDecoder(r.Body).Decode(&e); err != nil {
-		RespondJSON(w, http.StatusBadRequest,
-			"El cuerpo del request no es un JSON valido", nil)
+	if !ValidarJSONDecodificacion(json.NewDecoder(r.Body).Decode(&e), w) {
 		return
 	}
 
@@ -440,28 +344,22 @@ func actualizarEmpleado(w http.ResponseWriter, r *http.Request) {
 	`,
 		e.Nombre, e.Telefono, e.Correo, idStr,
 	)
-	if err != nil {
-		RespondJSON(w, http.StatusInternalServerError,
-			"Error al actualizar empleado en la base de datos", nil)
+
+	if ManejarErrorInsertActualizar(err, w, "update", "empleado") {
 		return
 	}
 
-	rowsAfectadas, _ := result.RowsAffected()
-	if rowsAfectadas == 0 {
-		RespondJSON(w, http.StatusNotFound,
-			"Empleado no encontrado o se encuentra desactivado", nil)
+	if !ValidarFilasAfectadas(result, w, "Empleado") {
 		return
 	}
 
-	RespondJSON(w, http.StatusOK, "Empleado actualizado correctamente", nil)
+	RespondJSON(w, http.StatusOK, fmt.Sprintf("Empleado %s", MsgActualizadoCorrectamente), nil)
 }
 
 // Handler para eliminar un empleado (desactivarlo)
 func eliminarEmpleado(w http.ResponseWriter, r *http.Request) {
-	idStr := r.URL.Query().Get("id")
-	if idStr == "" {
-		RespondJSON(w, http.StatusBadRequest,
-			"Falta el parametro id de empleado", nil)
+	idStr, ok := ValidarIDParametro(r, w, "empleado")
+	if !ok {
 		return
 	}
 
@@ -469,20 +367,16 @@ func eliminarEmpleado(w http.ResponseWriter, r *http.Request) {
 		"UPDATE empleado SET activo = FALSE WHERE id_empleado = $1 AND activo = TRUE",
 		idStr,
 	)
-	if err != nil {
-		RespondJSON(w, http.StatusInternalServerError,
-			"Error al desactivar empleado", nil)
+
+	if ManejarErrorInsertActualizar(err, w, "delete", "empleado") {
 		return
 	}
 
-	rowsAfectadas, _ := result.RowsAffected()
-	if rowsAfectadas == 0 {
-		RespondJSON(w, http.StatusNotFound,
-			"Empleado no encontrado o ya se encuentra desactivado", nil)
+	if !ValidarFilasAfectadas(result, w, "Empleado") {
 		return
 	}
 
-	RespondJSON(w, http.StatusOK, "Empleado desactivado correctamente", nil)
+	RespondJSON(w, http.StatusOK, fmt.Sprintf("Empleado %s", MsgDesactivadoCorrectamente), nil)
 }
 
 // Handler para traer todos los proveedores
@@ -517,42 +411,23 @@ func getProveedores(w http.ResponseWriter, r *http.Request) {
 
 // Handler para traer un proveedor por ID
 func getProveedorPorID(w http.ResponseWriter, r *http.Request) {
-	idStr := r.URL.Query().Get("id")
-	if idStr == "" {
-		RespondJSON(w, http.StatusBadRequest,
-			"Falta el parametro id de proveedor", nil)
+	idStr, ok := ValidarIDParametro(r, w, "proveedor")
+	if !ok {
 		return
 	}
 
-	var prov Proveedor
-	err := DB.QueryRow(`
-		SELECT id_proveedor, nombre, telefono, correo, activo
-		FROM proveedor WHERE id_proveedor = $1 AND activo = TRUE
-	`, idStr).Scan(
-		&prov.IDProveedor, &prov.Nombre, &prov.Telefono,
-		&prov.Correo, &prov.Activo,
-	)
-
-	if err == sql.ErrNoRows {
-		RespondJSON(w, http.StatusNotFound,
-			"Proveedor no encontrado", nil)
-		return
-	}
-	if err != nil {
-		RespondJSON(w, http.StatusInternalServerError,
-			"Error al consultar proveedor", nil)
+	prov, err := ObtenerProveedorPorID(idStr)
+	if ManejarErrorConsulta(err, w, "Proveedor") {
 		return
 	}
 
-	RespondJSON(w, http.StatusOK, "Proveedor obtenido correctamente", prov)
+	RespondJSON(w, http.StatusOK, fmt.Sprintf("Proveedor %s", MsgObtenidoCorrectamente), prov)
 }
 
 // Handler para crear un proveedor
 func crearProveedor(w http.ResponseWriter, r *http.Request) {
 	var prov Proveedor
-	if err := json.NewDecoder(r.Body).Decode(&prov); err != nil {
-		RespondJSON(w, http.StatusBadRequest,
-			"El cuerpo del request no es un JSON valido", nil)
+	if !ValidarJSONDecodificacion(json.NewDecoder(r.Body).Decode(&prov), w) {
 		return
 	}
 
@@ -564,28 +439,22 @@ func crearProveedor(w http.ResponseWriter, r *http.Request) {
 		prov.Nombre, prov.Telefono, prov.Correo,
 	).Scan(&prov.IDProveedor)
 
-	if err != nil {
-		RespondJSON(w, http.StatusInternalServerError,
-			"Error al insertar proveedor", nil)
+	if ManejarErrorInsertActualizar(err, w, "insert", "proveedor") {
 		return
 	}
 
-	RespondJSON(w, http.StatusCreated, "Proveedor creado correctamente", prov)
+	RespondJSON(w, http.StatusCreated, fmt.Sprintf("Proveedor %s", MsgCreadoCorrectamente), prov)
 }
 
 // Handler para actualizar un proveedor
 func actualizarProveedor(w http.ResponseWriter, r *http.Request) {
-	idStr := r.URL.Query().Get("id")
-	if idStr == "" {
-		RespondJSON(w, http.StatusBadRequest,
-			"Falta el parametro id de proveedor", nil)
+	idStr, ok := ValidarIDParametro(r, w, "proveedor")
+	if !ok {
 		return
 	}
 
 	var prov Proveedor
-	if err := json.NewDecoder(r.Body).Decode(&prov); err != nil {
-		RespondJSON(w, http.StatusBadRequest,
-			"El cuerpo del request no es un JSON valido", nil)
+	if !ValidarJSONDecodificacion(json.NewDecoder(r.Body).Decode(&prov), w) {
 		return
 	}
 
@@ -596,28 +465,22 @@ func actualizarProveedor(w http.ResponseWriter, r *http.Request) {
 	`,
 		prov.Nombre, prov.Telefono, prov.Correo, idStr,
 	)
-	if err != nil {
-		RespondJSON(w, http.StatusInternalServerError,
-			"Error al actualizar proveedor en la base de datos", nil)
+
+	if ManejarErrorInsertActualizar(err, w, "update", "proveedor") {
 		return
 	}
 
-	rowsAfectadas, _ := result.RowsAffected()
-	if rowsAfectadas == 0 {
-		RespondJSON(w, http.StatusNotFound,
-			"Proveedor no encontrado o se encuentra desactivado", nil)
+	if !ValidarFilasAfectadas(result, w, "Proveedor") {
 		return
 	}
 
-	RespondJSON(w, http.StatusOK, "Proveedor actualizado correctamente", nil)
+	RespondJSON(w, http.StatusOK, fmt.Sprintf("Proveedor %s", MsgActualizadoCorrectamente), nil)
 }
 
 // Handler para eliminar un proveedor (desactivarlo)
 func eliminarProveedor(w http.ResponseWriter, r *http.Request) {
-	idStr := r.URL.Query().Get("id")
-	if idStr == "" {
-		RespondJSON(w, http.StatusBadRequest,
-			"Falta el parametro id de proveedor", nil)
+	idStr, ok := ValidarIDParametro(r, w, "proveedor")
+	if !ok {
 		return
 	}
 
@@ -625,20 +488,16 @@ func eliminarProveedor(w http.ResponseWriter, r *http.Request) {
 		"UPDATE proveedor SET activo = FALSE WHERE id_proveedor = $1 AND activo = TRUE",
 		idStr,
 	)
-	if err != nil {
-		RespondJSON(w, http.StatusInternalServerError,
-			"Error al desactivar proveedor", nil)
+
+	if ManejarErrorInsertActualizar(err, w, "delete", "proveedor") {
 		return
 	}
 
-	rowsAfectadas, _ := result.RowsAffected()
-	if rowsAfectadas == 0 {
-		RespondJSON(w, http.StatusNotFound,
-			"Proveedor no encontrado o ya se encuentra desactivado", nil)
+	if !ValidarFilasAfectadas(result, w, "Proveedor") {
 		return
 	}
 
-	RespondJSON(w, http.StatusOK, "Proveedor desactivado correctamente", nil)
+	RespondJSON(w, http.StatusOK, fmt.Sprintf("Proveedor %s", MsgDesactivadoCorrectamente), nil)
 }
 
 // Handler para traer todas las categorias
@@ -658,7 +517,7 @@ func getCategorias(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var c Categoria
 		err := rows.Scan(
-			&c.Id_categoria, &c.Nombre,
+			&c.IdCategoria, &c.Nombre,
 		)
 		if err != nil {
 			RespondJSON(w, http.StatusInternalServerError,
@@ -673,33 +532,17 @@ func getCategorias(w http.ResponseWriter, r *http.Request) {
 
 // Handler para traer una categoria por ID
 func getCategoriaPorID(w http.ResponseWriter, r *http.Request) {
-	idStr := r.URL.Query().Get("id")
-	if idStr == "" {
-		RespondJSON(w, http.StatusBadRequest,
-			"Falta el parametro id de categoria", nil)
+	idStr, ok := ValidarIDParametro(r, w, "categoria")
+	if !ok {
 		return
 	}
 
-	var c Categoria
-	err := DB.QueryRow(`
-		SELECT id_categoria, nombre
-		FROM categoria WHERE id_categoria = $1
-	`, idStr).Scan(
-		&c.Id_categoria, &c.Nombre,
-	)
-
-	if err == sql.ErrNoRows {
-		RespondJSON(w, http.StatusNotFound,
-			"Categoria no encontrada", nil)
-		return
-	}
-	if err != nil {
-		RespondJSON(w, http.StatusInternalServerError,
-			"Error al consultar categoria", nil)
+	c, err := ObtenerCategoriaPorID(idStr)
+	if ManejarErrorConsulta(err, w, "Categoria") {
 		return
 	}
 
-	RespondJSON(w, http.StatusOK, "Categoria obtenida correctamente", c)
+	RespondJSON(w, http.StatusOK, fmt.Sprintf("Categoria %s", MsgObtenidoCorrectamente), c)
 }
 
 // Handler para obtener todas las compras
@@ -737,22 +580,20 @@ func getCompras(w http.ResponseWriter, r *http.Request) {
 
 // Handler para obtener compra por ID
 func getCompraPorID(w http.ResponseWriter, r *http.Request) {
-	idStr := r.URL.Query().Get("id")
-	if idStr == "" {
-		RespondJSON(w, http.StatusBadRequest,
-			"Falta el parametro id en la URL, ejemplo: /compras/detalle?id=1", nil)
+	idStr, ok := ValidarIDParametro(r, w, "compra")
+	if !ok {
 		return
 	}
 
 	type CompraDetalle struct {
-		IDCompra   int    `json:"id_compra"`
-		Fecha      string `json:"fecha"`
-		Total      float64 `json:"total"`
-		MetodoPago *string `json:"metodo_pago"`
-		Estado     *string `json:"estado"`
-		NumFactura string `json:"num_factura"`
-		Cliente    string `json:"cliente"`
-		Empleado   string `json:"empleado"`
+		IDCompra   int           `json:"id_compra"`
+		Fecha      string        `json:"fecha"`
+		Total      float64       `json:"total"`
+		MetodoPago *string       `json:"metodo_pago"`
+		Estado     *string       `json:"estado"`
+		NumFactura string        `json:"num_factura"`
+		Cliente    string        `json:"cliente"`
+		Empleado   string        `json:"empleado"`
 		Productos  []ItemDetalle `json:"productos"`
 	}
 
@@ -770,13 +611,7 @@ func getCompraPorID(w http.ResponseWriter, r *http.Request) {
 		&c.Cliente, &c.Empleado,
 	)
 
-	if err == sql.ErrNoRows {
-		RespondJSON(w, http.StatusNotFound, "Compra no encontrada", nil)
-		return
-	}
-	if err != nil {
-		RespondJSON(w, http.StatusInternalServerError,
-			"Error al consultar compra", nil)
+	if ManejarErrorConsulta(err, w, "Compra") {
 		return
 	}
 
@@ -803,25 +638,29 @@ func getCompraPorID(w http.ResponseWriter, r *http.Request) {
 		c.Productos = append(c.Productos, item)
 	}
 
-	RespondJSON(w, http.StatusOK, "Compra obtenida correctamente", c)
+	RespondJSON(w, http.StatusOK, fmt.Sprintf("Compra %s", MsgObtenidoCorrectamente), c)
 }
 
 // Handler para crear una compra
 func crearCompra(w http.ResponseWriter, r *http.Request) {
 	var req CompraRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		RespondJSON(w, http.StatusBadRequest,
-			"El cuerpo del request no es un JSON valido", nil)
+	if !ValidarJSONDecodificacion(json.NewDecoder(r.Body).Decode(&req), w) {
 		return
 	}
 
-	tx, err := DB.Begin()
-	if err != nil {
-		RespondJSON(w, http.StatusInternalServerError,
-			"Error al iniciar transaccion", nil)
+	resultado, ok := EjecutarEnTransaccion(w, func(tx *sql.Tx) (interface{}, error) {
+		return procesarNuevaCompra(tx, req)
+	})
+
+	if !ok {
 		return
 	}
 
+	RespondJSON(w, http.StatusCreated, fmt.Sprintf("Compra %s", MsgCreadoCorrectamente), resultado)
+}
+
+// Helper para procesar compra dentro de transacción
+func procesarNuevaCompra(tx *sql.Tx, req CompraRequest) (interface{}, error) {
 	type detalleTemp struct {
 		idProducto     int
 		cantidad       int
@@ -832,24 +671,14 @@ func crearCompra(w http.ResponseWriter, r *http.Request) {
 	var total float64
 	var detalles []detalleTemp
 
+	// Calcular precios y validar productos
 	for _, item := range req.Productos {
-		var precio float64
-		err := tx.QueryRow(
-			"SELECT precio_actual FROM producto WHERE id_producto = $1 AND activo = TRUE",
-			item.IDProducto,
-		).Scan(&precio)
-
+		precio, err := ObtenerPrecioProducto(tx, item.IDProducto)
 		if err == sql.ErrNoRows {
-			tx.Rollback()
-			RespondJSON(w, http.StatusNotFound,
-				"Producto no encontrado o inactivo", nil)
-			return
+			return nil, fmt.Errorf("Producto no encontrado o inactivo")
 		}
 		if err != nil {
-			tx.Rollback()
-			RespondJSON(w, http.StatusInternalServerError,
-				"Error al consultar precio de producto", nil)
-			return
+			return nil, fmt.Errorf("Error al consultar precio de producto")
 		}
 
 		subTotal := precio * float64(item.Cantidad)
@@ -862,8 +691,9 @@ func crearCompra(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
+	// Insertar compra
 	var idCompra int
-	err = tx.QueryRow(`
+	err := tx.QueryRow(`
 		INSERT INTO compra (fecha, total, metodo_pago, estado, num_factura, id_cliente, id_empleado)
 		VALUES ($1, $2, $3, 'completado', $4, $5, $6)
 		RETURNING id_compra
@@ -874,12 +704,10 @@ func crearCompra(w http.ResponseWriter, r *http.Request) {
 	).Scan(&idCompra)
 
 	if err != nil {
-		tx.Rollback()
-		RespondJSON(w, http.StatusInternalServerError,
-			"Error al registrar compra, se hizo rollback", nil)
-		return
+		return nil, fmt.Errorf("Error al registrar compra")
 	}
 
+	// Insertar detalles y actualizar stock
 	for _, d := range detalles {
 		_, err = tx.Exec(`
 			INSERT INTO detalle_compra (id_compra, id_producto, cantidad, precio_unitario, sub_total)
@@ -887,10 +715,7 @@ func crearCompra(w http.ResponseWriter, r *http.Request) {
 		`, idCompra, d.idProducto, d.cantidad, d.precioUnitario, d.subTotal)
 
 		if err != nil {
-			tx.Rollback()
-			RespondJSON(w, http.StatusInternalServerError,
-				"Error al registrar detalle de compra, se hizo rollback", nil)
-			return
+			return nil, fmt.Errorf("Error al registrar detalle de compra")
 		}
 
 		_, err = tx.Exec(`
@@ -899,32 +724,20 @@ func crearCompra(w http.ResponseWriter, r *http.Request) {
 		`, d.cantidad, d.idProducto)
 
 		if err != nil {
-			tx.Rollback()
-			RespondJSON(w, http.StatusInternalServerError,
-				"Error al actualizar stock, se hizo rollback", nil)
-			return
+			return nil, fmt.Errorf("Error al actualizar stock")
 		}
 	}
 
-	if err = tx.Commit(); err != nil {
-		RespondJSON(w, http.StatusInternalServerError,
-			"Error al confirmar transaccion", nil)
-		return
-	}
-
-	RespondJSON(w, http.StatusCreated, "Compra registrada correctamente",
-		map[string]interface{}{
-			"id_compra": idCompra,
-			"total":     total,
-		})
+	return map[string]interface{}{
+		"id_compra": idCompra,
+		"total":     total,
+	}, nil
 }
 
 // Handler para cancelar una compra (valido unicamente para estado completado)
 func cancelarCompra(w http.ResponseWriter, r *http.Request) {
-	idStr := r.URL.Query().Get("id")
-	if idStr == "" {
-		RespondJSON(w, http.StatusBadRequest,
-			"Falta el parametro id en la URL, ejemplo: /compras/detalle?id=1", nil)
+	idStr, ok := ValidarIDParametro(r, w, "compra")
+	if !ok {
 		return
 	}
 
@@ -932,20 +745,16 @@ func cancelarCompra(w http.ResponseWriter, r *http.Request) {
 		UPDATE compra SET estado = 'cancelado'
 		WHERE id_compra = $1 AND estado = 'completado'
 	`, idStr)
-	if err != nil {
-		RespondJSON(w, http.StatusInternalServerError,
-			"Error al cancelar compra", nil)
+
+	if ManejarErrorInsertActualizar(err, w, "update", "compra") {
 		return
 	}
 
-	rowsAfectadas, _ := result.RowsAffected()
-	if rowsAfectadas == 0 {
-		RespondJSON(w, http.StatusNotFound,
-			"Compra no encontrada o ya estaba cancelada", nil)
+	if !ValidarFilasAfectadas(result, w, "Compra") {
 		return
 	}
 
-	RespondJSON(w, http.StatusOK, "Compra cancelada correctamente", nil)
+	RespondJSON(w, http.StatusOK, fmt.Sprintf("Compra %s", MsgCreadoCorrectamente), nil)
 }
 
 // Handler para vista de auditoria de ventas
