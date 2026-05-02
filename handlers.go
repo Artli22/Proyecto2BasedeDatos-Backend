@@ -647,109 +647,6 @@ func crearCompra(w http.ResponseWriter, r *http.Request) {
 	RespondJSON(w, http.StatusCreated, fmt.Sprintf("Compra %s", MsgCreadoCorrectamente), resultado)
 }
 
-// Helper para procesar compra dentro de transacción
-func procesarNuevaCompra(tx *sql.Tx, req CompraRequest) (interface{}, error) {
-	var total float64
-	var detalles []DetalleTemp
-
-	if len(req.Productos) == 0 {
-	 return nil, fmt.Errorf("La compra debe incluir al menos un producto")
-	}
-
-	for _, item := range req.Productos {
-		if item.Cantidad <= 0 {
-			return nil, fmt.Errorf(
-				"La cantidad del producto %d debe ser mayor a 0",
-				item.IDProducto,
-			)
-		}
-
-		precio, stock, err := ObtenerPrecioProducto(tx, item.IDProducto)
-
-		if err == sql.ErrNoRows {
-			return nil, fmt.Errorf(
-				"Producto %d no encontrado o inactivo",
-				item.IDProducto,
-			)
-		}
-
-		if err != nil {
-			return nil, fmt.Errorf(
-				"Error al consultar producto %d",
-				item.IDProducto,
-			)
-		}
-
-		if stock < item.Cantidad {
-			return nil, fmt.Errorf(
-				"Stock insuficiente para producto %d. Disponible: %d, solicitado: %d",
-				item.IDProducto,
-				stock,
-				item.Cantidad,
-			)
-		}
-
-		detalles = append(detalles, DetalleTemp{
-			IDProducto:     item.IDProducto,
-			Cantidad:       item.Cantidad,
-			PrecioUnitario: precio,
-			SubTotal:       precio * float64(item.Cantidad),
-		})
-		total += precio * float64(item.Cantidad)
-	}
-	
-	var idCompra int
-	err := tx.QueryRow(`
-		INSERT INTO compra (fecha, total, metodo_pago, estado, num_factura, id_cliente, id_empleado)
-		VALUES ($1, $2, $3, 'completado', $4, $5, $6)
-		RETURNING id_compra
-	`,
-		req.Fecha, total, req.MetodoPago,
-		generarNumFactura(),
-		req.IDCliente, req.IDEmpleado,
-	).Scan(&idCompra)
-
-	if err != nil {
-		return nil, fmt.Errorf("Error al registrar compra")
-	}
-
-	for _, d := range detalles {
-		_, err = tx.Exec(`
-			INSERT INTO detalle_compra (id_compra, id_producto, cantidad, precio_unitario, sub_total)
-			VALUES ($1, $2, $3, $4, $5)
-		`, idCompra, d.IDProducto, d.Cantidad, d.PrecioUnitario, d.SubTotal)
-
-		if err != nil {
-			return nil, fmt.Errorf("Error al registrar detalle de compra")
-		}
-
-		result, err := tx.Exec(`
-			UPDATE producto SET stock = stock - $1
-			WHERE id_producto = $2
-			 AND activo = TRUE
-	  		 AND stock >= $1
-		`, d.Cantidad, d.IDProducto)
-
-		if err != nil {
-			return nil, fmt.Errorf("Error al actualizar stock")
-		}
-
-		rowsAffected, _ := result.RowsAffected()
-		if rowsAffected == 0 {
-			return nil, fmt.Errorf(
-				"Stock insuficiente al actualizar producto %d",
-				d.IDProducto,
-			)
-		}
-		
-	}
-
-	return map[string]interface{}{
-		"id_compra": idCompra,
-		"total":     total,
-	}, nil
-}
-
 // Handler para cancelar una compra (valido unicamente para estado completado)
 func cancelarCompra(w http.ResponseWriter, r *http.Request) {
 	idStr, ok := ValidarIDParametro(r, w, "compra")
@@ -766,64 +663,6 @@ func cancelarCompra(w http.ResponseWriter, r *http.Request) {
 	}
 
 	RespondJSON(w, http.StatusOK, "Compra cancelada correctamente y stock restaurado", resultado)
-}
-
-func procesarCancelacionCompra(tx *sql.Tx, idStr string) (interface{}, error) {
-	result, err := tx.Exec(`
-		UPDATE compra 
-		SET estado = 'cancelado'
-		WHERE id_compra = $1 
-		  AND estado = 'completado'
-	`, idStr)
-
-	if err != nil {
-		return nil, fmt.Errorf("Error al cancelar compra")
-	}
-
-	rowsAffected, _ := result.RowsAffected()
-	if rowsAffected == 0 {
-		return nil, fmt.Errorf("Compra no encontrada o ya cancelada")
-	}
-
-	rows, err := tx.Query(`
-		SELECT id_producto, cantidad
-		FROM detalle_compra
-		WHERE id_compra = $1
-	`, idStr)
-
-	if err != nil {
-		return nil, fmt.Errorf("Error al consultar detalle de compra")
-	}
-	defer rows.Close()
-
-	productosRestaurados := 0
-
-	for rows.Next() {
-		var idProducto int
-		var cantidad int
-
-		if err := rows.Scan(&idProducto, &cantidad); err != nil {
-			return nil, fmt.Errorf("Error al leer detalle de compra")
-		}
-
-		_, err = tx.Exec(`
-			UPDATE producto
-			SET stock = stock + $1
-			WHERE id_producto = $2
-		`, cantidad, idProducto)
-
-		if err != nil {
-			return nil, fmt.Errorf("Error al restaurar stock del producto %d", idProducto)
-		}
-
-		productosRestaurados++
-	}
-
-	return map[string]interface{}{
-		"id_compra":              idStr,
-		"productos_restaurados":  productosRestaurados,
-		"estado":                 "cancelado",
-	}, nil
 }
 
 // Handler para vista de auditoria de ventas
@@ -921,7 +760,7 @@ func getControlStock(w http.ResponseWriter, r *http.Request) {
 	RespondJSON(w, http.StatusOK, "Stock critico obtenido correctamente", productos)
 }
 
-// Handler para vista de desempenio laboral
+// Handler para vista de desempeno laboral
 func getDesempenoEmpleados(w http.ResponseWriter, r *http.Request) {
 	rows, err := DB.Query(`
 		SELECT id_empleado, empleado, total_transacciones, monto_total_vendido, ticket_promedio, ultima_venta 
