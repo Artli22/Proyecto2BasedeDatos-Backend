@@ -95,12 +95,12 @@ func actualizarProducto(w http.ResponseWriter, r *http.Request) {
 	result, err := DB.Exec(`
 		UPDATE producto 
 		SET nombre=$1, descripcion=$2, precio_actual=$3, fecha_vencimiento=$4,
-			imagen=$5, stock=$6, id_categoria=$7, id_proveedor=$8
-		WHERE id_producto=$9 AND activo = TRUE
+			imagen=$5, stock=$6, id_categoria=$7, id_proveedor=$8, activo=$9
+		WHERE id_producto=$10
 	`,
 		p.Nombre, p.Descripcion, p.PrecioActual,
 		p.FechaVencimiento, p.Imagen, p.Stock,
-		p.IDCategoria, p.IDProveedor, idStr,
+		p.IDCategoria, p.IDProveedor, p.Activo, idStr,
 	)
 
 	if ManejarErrorInsertActualizar(err, w, "update", "producto") {
@@ -218,10 +218,10 @@ func actualizarCliente(w http.ResponseWriter, r *http.Request) {
 
 	result, err := DB.Exec(`
 		UPDATE cliente 
-		SET nombre=$1, telefono=$2, correo=$3
-		WHERE id_cliente=$4 AND activo = TRUE
+		SET nombre=$1, telefono=$2, correo=$3, activo=$4
+		WHERE id_cliente=$5
 	`,
-		c.Nombre, c.Telefono, c.Correo, idStr,
+		c.Nombre, c.Telefono, c.Correo, c.Activo, idStr,
 	)
 
 	if ManejarErrorInsertActualizar(err, w, "update", "cliente") {
@@ -303,82 +303,6 @@ func getEmpleadoPorID(w http.ResponseWriter, r *http.Request) {
 	RespondJSON(w, http.StatusOK, fmt.Sprintf("Empleado %s", MsgObtenidoCorrectamente), e)
 }
 
-// Handler para crear un empleado
-func crearEmpleado(w http.ResponseWriter, r *http.Request) {
-	var e Empleado
-	if !ValidarJSONDecodificacion(json.NewDecoder(r.Body).Decode(&e), w) {
-		return
-	}
-
-	err := DB.QueryRow(`
-		INSERT INTO empleado (nombre, telefono, correo)
-		VALUES ($1, $2, $3)
-		RETURNING id_empleado
-	`,
-		e.Nombre, e.Telefono, e.Correo,
-	).Scan(&e.IdEmpleado)
-
-	if ManejarErrorInsertActualizar(err, w, "insert", "empleado") {
-		return
-	}
-
-	RespondJSON(w, http.StatusCreated, fmt.Sprintf("Empleado %s", MsgCreadoCorrectamente), e)
-}
-
-// Handler para actualizar un empleado
-func actualizarEmpleado(w http.ResponseWriter, r *http.Request) {
-	idStr, ok := ValidarIDParametro(r, w, "empleado")
-	if !ok {
-		return
-	}
-
-	var e Empleado
-	if !ValidarJSONDecodificacion(json.NewDecoder(r.Body).Decode(&e), w) {
-		return
-	}
-
-	result, err := DB.Exec(`
-		UPDATE empleado 
-		SET nombre=$1, telefono=$2, correo=$3
-		WHERE id_empleado=$4 AND activo = TRUE
-	`,
-		e.Nombre, e.Telefono, e.Correo, idStr,
-	)
-
-	if ManejarErrorInsertActualizar(err, w, "update", "empleado") {
-		return
-	}
-
-	if !ValidarFilasAfectadas(result, w, "Empleado") {
-		return
-	}
-
-	RespondJSON(w, http.StatusOK, fmt.Sprintf("Empleado %s", MsgActualizadoCorrectamente), nil)
-}
-
-// Handler para eliminar un empleado (desactivarlo)
-func eliminarEmpleado(w http.ResponseWriter, r *http.Request) {
-	idStr, ok := ValidarIDParametro(r, w, "empleado")
-	if !ok {
-		return
-	}
-
-	result, err := DB.Exec(
-		"UPDATE empleado SET activo = FALSE WHERE id_empleado = $1 AND activo = TRUE",
-		idStr,
-	)
-
-	if ManejarErrorInsertActualizar(err, w, "delete", "empleado") {
-		return
-	}
-
-	if !ValidarFilasAfectadas(result, w, "Empleado") {
-		return
-	}
-
-	RespondJSON(w, http.StatusOK, fmt.Sprintf("Empleado %s", MsgDesactivadoCorrectamente), nil)
-}
-
 // Handler para traer todos los proveedores
 func getProveedores(w http.ResponseWriter, r *http.Request) {
 	rows, err := DB.Query(`
@@ -422,82 +346,6 @@ func getProveedorPorID(w http.ResponseWriter, r *http.Request) {
 	}
 
 	RespondJSON(w, http.StatusOK, fmt.Sprintf("Proveedor %s", MsgObtenidoCorrectamente), prov)
-}
-
-// Handler para crear un proveedor
-func crearProveedor(w http.ResponseWriter, r *http.Request) {
-	var prov Proveedor
-	if !ValidarJSONDecodificacion(json.NewDecoder(r.Body).Decode(&prov), w) {
-		return
-	}
-
-	err := DB.QueryRow(`
-		INSERT INTO proveedor (nombre, telefono, correo)
-		VALUES ($1, $2, $3)
-		RETURNING id_proveedor
-	`,
-		prov.Nombre, prov.Telefono, prov.Correo,
-	).Scan(&prov.IDProveedor)
-
-	if ManejarErrorInsertActualizar(err, w, "insert", "proveedor") {
-		return
-	}
-
-	RespondJSON(w, http.StatusCreated, fmt.Sprintf("Proveedor %s", MsgCreadoCorrectamente), prov)
-}
-
-// Handler para actualizar un proveedor
-func actualizarProveedor(w http.ResponseWriter, r *http.Request) {
-	idStr, ok := ValidarIDParametro(r, w, "proveedor")
-	if !ok {
-		return
-	}
-
-	var prov Proveedor
-	if !ValidarJSONDecodificacion(json.NewDecoder(r.Body).Decode(&prov), w) {
-		return
-	}
-
-	result, err := DB.Exec(`
-		UPDATE proveedor 
-		SET nombre=$1, telefono=$2, correo=$3
-		WHERE id_proveedor=$4 AND activo = TRUE
-	`,
-		prov.Nombre, prov.Telefono, prov.Correo, idStr,
-	)
-
-	if ManejarErrorInsertActualizar(err, w, "update", "proveedor") {
-		return
-	}
-
-	if !ValidarFilasAfectadas(result, w, "Proveedor") {
-		return
-	}
-
-	RespondJSON(w, http.StatusOK, fmt.Sprintf("Proveedor %s", MsgActualizadoCorrectamente), nil)
-}
-
-// Handler para eliminar un proveedor (desactivarlo)
-func eliminarProveedor(w http.ResponseWriter, r *http.Request) {
-	idStr, ok := ValidarIDParametro(r, w, "proveedor")
-	if !ok {
-		return
-	}
-
-	result, err := DB.Exec(
-		"UPDATE proveedor SET activo = FALSE WHERE id_proveedor = $1 AND activo = TRUE",
-		idStr,
-	)
-
-	if ManejarErrorInsertActualizar(err, w, "delete", "proveedor") {
-		return
-	}
-
-	if !ValidarFilasAfectadas(result, w, "Proveedor") {
-		return
-	}
-
-	RespondJSON(w, http.StatusOK, fmt.Sprintf("Proveedor %s", MsgDesactivadoCorrectamente), nil)
 }
 
 // Handler para traer todas las categorias
