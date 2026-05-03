@@ -142,6 +142,25 @@ func main() {
 		}
 	}))
 
+	// Detalles de Compra 
+	http.HandleFunc("/detalle-compra", habilitarCORS(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			getDetalleCompras(w, r)
+		default:
+			RespondJSON(w, http.StatusMethodNotAllowed, "Metodo no permitido", nil)
+		}
+	}))
+
+	http.HandleFunc("/detalle-compra/detalle", habilitarCORS(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			getDetalleCompraPorID(w, r)
+		default:
+			RespondJSON(w, http.StatusMethodNotAllowed, "Metodo no permitido", nil)
+		}
+	}))
+
 	// Reportes 
 	http.HandleFunc("/reportes/auditoria-ventas", habilitarCORS(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {

@@ -638,3 +638,59 @@ func getDesempenoEmpleados(w http.ResponseWriter, r *http.Request) {
 
 	RespondJSON(w, http.StatusOK, "Desempeno de empleados obtenido correctamente", empleados)
 }
+
+// Handler para obtener todos los detalles de compra
+func getDetalleCompras(w http.ResponseWriter, r *http.Request) {
+	rows, err := DB.Query(`
+		SELECT id_compra, id_producto, cantidad, precio_unitario, sub_total
+		FROM detalle_compra
+		ORDER BY id_compra DESC, id_producto ASC
+	`)
+	if err != nil {
+		RespondJSON(w, http.StatusInternalServerError,
+			"Error al consultar detalles de compra", nil)
+		return
+	}
+	defer rows.Close()
+
+	detalles := []DetalleCompra{}
+	for rows.Next() {
+		var dc DetalleCompra
+		err := rows.Scan(
+			&dc.IDCompra, &dc.IDProducto, &dc.Cantidad,
+			&dc.PrecioUnitario, &dc.SubTotal,
+		)
+		if err != nil {
+			RespondJSON(w, http.StatusInternalServerError,
+				"Error al leer fila de detalle de compra", nil)
+			return
+		}
+		detalles = append(detalles, dc)
+	}
+
+	RespondJSON(w, http.StatusOK, "Detalles de compra obtenidos correctamente", detalles)
+}
+
+// Handler para obtener detalle de compra por ID
+func getDetalleCompraPorID(w http.ResponseWriter, r *http.Request) {
+	idStr, ok := ValidarIDParametro(r, w, "detalle de compra")
+	if !ok {
+		return
+	}
+
+	var dc DetalleCompra
+	err := DB.QueryRow(`
+		SELECT id_compra, id_producto, cantidad, precio_unitario, sub_total
+		FROM detalle_compra WHERE id_compra = $1
+		LIMIT 1
+	`, idStr).Scan(
+		&dc.IDCompra, &dc.IDProducto, &dc.Cantidad,
+		&dc.PrecioUnitario, &dc.SubTotal,
+	)
+
+	if ManejarErrorConsulta(err, w, "Detalle de compra") {
+		return
+	}
+
+	RespondJSON(w, http.StatusOK, fmt.Sprintf("Detalle de compra %s", MsgObtenidoCorrectamente), dc)
+}

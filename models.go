@@ -130,3 +130,11 @@ type DesempenoEmpleado struct {
     TicketPromedio      float64 `json:"ticket_promedio"`
     UltimaVenta         *string `json:"ultima_venta"`
 }
+
+type DetalleCompra struct {
+    IDCompra        int     `json:"id_compra"`
+    IDProducto      int     `json:"id_producto"`
+    Cantidad        int     `json:"cantidad"`
+    PrecioUnitario  float64 `json:"precio_unitario"`
+    SubTotal        float64 `json:"sub_total"`
+}
