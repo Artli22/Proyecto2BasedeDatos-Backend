@@ -13,7 +13,7 @@ func getProductos(w http.ResponseWriter, r *http.Request) {
 	rows, err := DB.Query(`
 		SELECT id_producto, nombre, descripcion, precio_actual, 
 		fecha_vencimiento, imagen, stock, activo, id_categoria, id_proveedor 
-		FROM producto WHERE activo = TRUE
+		FROM producto
 	`)
 	if err != nil {
 		RespondJSON(w, http.StatusInternalServerError,
@@ -141,7 +141,7 @@ func eliminarProducto(w http.ResponseWriter, r *http.Request) {
 func getClientes(w http.ResponseWriter, r *http.Request) {
 	rows, err := DB.Query(`
 		SELECT id_cliente, nombre, telefono, correo, activo
-		FROM cliente WHERE activo = TRUE
+		FROM cliente
 	`)
 	if err != nil {
 		RespondJSON(w, http.StatusInternalServerError,
@@ -262,7 +262,7 @@ func eliminarCliente(w http.ResponseWriter, r *http.Request) {
 func getEmpleados(w http.ResponseWriter, r *http.Request) {
 	rows, err := DB.Query(`
 		SELECT id_empleado, nombre, telefono, correo, activo
-		FROM empleado WHERE activo = TRUE
+		FROM empleado
 	`)
 	if err != nil {
 		RespondJSON(w, http.StatusInternalServerError,
@@ -307,7 +307,7 @@ func getEmpleadoPorID(w http.ResponseWriter, r *http.Request) {
 func getProveedores(w http.ResponseWriter, r *http.Request) {
 	rows, err := DB.Query(`
 		SELECT id_proveedor, nombre, telefono, correo, activo
-		FROM proveedor WHERE activo = TRUE
+		FROM proveedor
 	`)
 	if err != nil {
 		RespondJSON(w, http.StatusInternalServerError,
