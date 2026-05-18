@@ -1,4 +1,4 @@
-// handlers.go
+
 package main
 
 import (
@@ -8,7 +8,7 @@ import (
 	"net/http"
 )
 
-// Handler para traer todos los productos
+// Enpoint para traer todos los productos
 func getProductos(w http.ResponseWriter, r *http.Request) {
 	rows, err := DB.Query(`
 		SELECT id_producto, nombre, descripcion, precio_actual, 
@@ -41,7 +41,7 @@ func getProductos(w http.ResponseWriter, r *http.Request) {
 	RespondJSON(w, http.StatusOK, "Productos obtenidos correctamente", productos)
 }
 
-// Handler para traer un producto por ID
+// Enpoint para traer un producto por ID
 func getProductoPorID(w http.ResponseWriter, r *http.Request) {
 	idStr, ok := ValidarIDParametro(r, w, "producto")
 	if !ok {
@@ -56,7 +56,7 @@ func getProductoPorID(w http.ResponseWriter, r *http.Request) {
 	RespondJSON(w, http.StatusOK, fmt.Sprintf("Producto %s", MsgObtenidoCorrectamente), p)
 }
 
-// Handler para crear un producto
+// Enpoint para crear un producto
 func crearProducto(w http.ResponseWriter, r *http.Request) {
 	var p Producto
 	if !ValidarJSONDecodificacion(json.NewDecoder(r.Body).Decode(&p), w) {
@@ -80,7 +80,7 @@ func crearProducto(w http.ResponseWriter, r *http.Request) {
 	RespondJSON(w, http.StatusCreated, fmt.Sprintf("Producto %s", MsgCreadoCorrectamente), p)
 }
 
-// Handler para actualizar un producto
+// Enpoint para actualizar un producto
 func actualizarProducto(w http.ResponseWriter, r *http.Request) {
 	idStr, ok := ValidarIDParametro(r, w, "producto")
 	if !ok {
@@ -114,7 +114,7 @@ func actualizarProducto(w http.ResponseWriter, r *http.Request) {
 	RespondJSON(w, http.StatusOK, fmt.Sprintf("Producto %s", MsgActualizadoCorrectamente), nil)
 }
 
-// Handler para eliminar un producto (desactivarlo)
+// Enpoint para eliminar un producto (desactivarlo)
 func eliminarProducto(w http.ResponseWriter, r *http.Request) {
 	idStr, ok := ValidarIDParametro(r, w, "producto")
 	if !ok {
@@ -137,7 +137,7 @@ func eliminarProducto(w http.ResponseWriter, r *http.Request) {
 	RespondJSON(w, http.StatusOK, fmt.Sprintf("Producto %s", MsgDesactivadoCorrectamente), nil)
 }
 
-// Handler para traer todos los clientes
+// Enpoint para traer todos los clientes
 func getClientes(w http.ResponseWriter, r *http.Request) {
 	rows, err := DB.Query(`
 		SELECT id_cliente, nombre, telefono, correo, activo
@@ -167,7 +167,7 @@ func getClientes(w http.ResponseWriter, r *http.Request) {
 	RespondJSON(w, http.StatusOK, "Clientes obtenidos correctamente", clientes)
 }
 
-// Handler para traer un cliente por ID
+// Enpoint para traer un cliente por ID
 func getClientePorID(w http.ResponseWriter, r *http.Request) {
 	idStr, ok := ValidarIDParametro(r, w, "cliente")
 	if !ok {
@@ -182,7 +182,7 @@ func getClientePorID(w http.ResponseWriter, r *http.Request) {
 	RespondJSON(w, http.StatusOK, fmt.Sprintf("Cliente %s", MsgObtenidoCorrectamente), c)
 }
 
-// Handler para crear un cliente
+// Enpoint para crear un cliente
 func crearCliente(w http.ResponseWriter, r *http.Request) {
 	var c Cliente
 	if !ValidarJSONDecodificacion(json.NewDecoder(r.Body).Decode(&c), w) {
@@ -204,7 +204,7 @@ func crearCliente(w http.ResponseWriter, r *http.Request) {
 	RespondJSON(w, http.StatusCreated, fmt.Sprintf("Cliente %s", MsgCreadoCorrectamente), c)
 }
 
-// Handler para actualizar un cliente
+// Enpoint para actualizar un cliente
 func actualizarCliente(w http.ResponseWriter, r *http.Request) {
 	idStr, ok := ValidarIDParametro(r, w, "cliente")
 	if !ok {
@@ -235,7 +235,7 @@ func actualizarCliente(w http.ResponseWriter, r *http.Request) {
 	RespondJSON(w, http.StatusOK, fmt.Sprintf("Cliente %s", MsgActualizadoCorrectamente), nil)
 }
 
-// Handler para eliminar un cliente (desactivarlo)
+// Enpoint para eliminar un cliente (desactivarlo)
 func eliminarCliente(w http.ResponseWriter, r *http.Request) {
 	idStr, ok := ValidarIDParametro(r, w, "cliente")
 	if !ok {
@@ -258,7 +258,7 @@ func eliminarCliente(w http.ResponseWriter, r *http.Request) {
 	RespondJSON(w, http.StatusOK, fmt.Sprintf("Cliente %s", MsgDesactivadoCorrectamente), nil)
 }
 
-// Handler para traer todos los empleados
+// Enpoint para traer todos los empleados
 func getEmpleados(w http.ResponseWriter, r *http.Request) {
 	rows, err := DB.Query(`
 		SELECT id_empleado, nombre, telefono, correo, activo
@@ -288,7 +288,7 @@ func getEmpleados(w http.ResponseWriter, r *http.Request) {
 	RespondJSON(w, http.StatusOK, "Empleados obtenidos correctamente", empleados)
 }
 
-// Handler para traer un empleado por ID
+// Enpoint para traer un empleado por ID
 func getEmpleadoPorID(w http.ResponseWriter, r *http.Request) {
 	idStr, ok := ValidarIDParametro(r, w, "empleado")
 	if !ok {
@@ -303,7 +303,83 @@ func getEmpleadoPorID(w http.ResponseWriter, r *http.Request) {
 	RespondJSON(w, http.StatusOK, fmt.Sprintf("Empleado %s", MsgObtenidoCorrectamente), e)
 }
 
-// Handler para traer todos los proveedores
+// Enpoint para crear un empleado
+func crearEmpleado(w http.ResponseWriter, r *http.Request) {
+	var e Empleado
+	if !ValidarJSONDecodificacion(json.NewDecoder(r.Body).Decode(&e), w) {
+		return
+	}
+
+	err := DB.QueryRow(`
+		INSERT INTO empleado (nombre, telefono, correo)
+		VALUES ($1, $2, $3)
+		RETURNING id_empleado
+	`,
+		e.Nombre, e.Telefono, e.Correo,
+	).Scan(&e.IdEmpleado)
+
+	if ManejarErrorInsertActualizar(err, w, "insert", "empleado") {
+		return
+	}
+
+	RespondJSON(w, http.StatusCreated, fmt.Sprintf("Empleado %s", MsgCreadoCorrectamente), e)
+}
+
+// Enpoint para actualizar un empleado
+func actualizarEmpleado(w http.ResponseWriter, r *http.Request) {
+	idStr, ok := ValidarIDParametro(r, w, "empleado")
+	if !ok {
+		return
+	}
+
+	var e Empleado
+	if !ValidarJSONDecodificacion(json.NewDecoder(r.Body).Decode(&e), w) {
+		return
+	}
+
+	result, err := DB.Exec(`
+		UPDATE empleado 
+		SET nombre=$1, telefono=$2, correo=$3, activo=$4
+		WHERE id_empleado=$5
+	`,
+		e.Nombre, e.Telefono, e.Correo, e.Activo, idStr,
+	)
+
+	if ManejarErrorInsertActualizar(err, w, "update", "empleado") {
+		return
+	}
+
+	if !ValidarFilasAfectadas(result, w, "Empleado") {
+		return
+	}
+
+	RespondJSON(w, http.StatusOK, fmt.Sprintf("Empleado %s", MsgActualizadoCorrectamente), nil)
+}
+
+// Enpoint para eliminar un empleado (desactivarlo)
+func eliminarEmpleado(w http.ResponseWriter, r *http.Request) {
+	idStr, ok := ValidarIDParametro(r, w, "empleado")
+	if !ok {
+		return
+	}
+
+	result, err := DB.Exec(
+		"UPDATE empleado SET activo = FALSE WHERE id_empleado = $1 AND activo = TRUE",
+		idStr,
+	)
+
+	if ManejarErrorInsertActualizar(err, w, "delete", "empleado") {
+		return
+	}
+
+	if !ValidarFilasAfectadas(result, w, "Empleado") {
+		return
+	}
+
+	RespondJSON(w, http.StatusOK, fmt.Sprintf("Empleado %s", MsgDesactivadoCorrectamente), nil)
+}
+
+// Enpoint para traer todos los proveedores
 func getProveedores(w http.ResponseWriter, r *http.Request) {
 	rows, err := DB.Query(`
 		SELECT id_proveedor, nombre, telefono, correo, activo
@@ -333,7 +409,7 @@ func getProveedores(w http.ResponseWriter, r *http.Request) {
 	RespondJSON(w, http.StatusOK, "Proveedores obtenidos correctamente", proveedores)
 }
 
-// Handler para traer un proveedor por ID
+// Enpoint para traer un proveedor por ID
 func getProveedorPorID(w http.ResponseWriter, r *http.Request) {
 	idStr, ok := ValidarIDParametro(r, w, "proveedor")
 	if !ok {
@@ -348,7 +424,7 @@ func getProveedorPorID(w http.ResponseWriter, r *http.Request) {
 	RespondJSON(w, http.StatusOK, fmt.Sprintf("Proveedor %s", MsgObtenidoCorrectamente), prov)
 }
 
-// Handler para traer todas las categorias
+// Enpoint para traer todas las categorias
 func getCategorias(w http.ResponseWriter, r *http.Request) {
 	rows, err := DB.Query(`
 		SELECT id_categoria, nombre
@@ -378,7 +454,7 @@ func getCategorias(w http.ResponseWriter, r *http.Request) {
 	RespondJSON(w, http.StatusOK, "Categorias obtenidas correctamente", categorias)
 }
 
-// Handler para traer una categoria por ID
+// Enpoint para traer una categoria por ID
 func getCategoriaPorID(w http.ResponseWriter, r *http.Request) {
 	idStr, ok := ValidarIDParametro(r, w, "categoria")
 	if !ok {
@@ -393,7 +469,7 @@ func getCategoriaPorID(w http.ResponseWriter, r *http.Request) {
 	RespondJSON(w, http.StatusOK, fmt.Sprintf("Categoria %s", MsgObtenidoCorrectamente), c)
 }
 
-// Handler para obtener todas las compras
+// Enpoint para obtener todas las compras
 func getCompras(w http.ResponseWriter, r *http.Request) {
 	rows, err := DB.Query(`
 		SELECT id_compra, fecha, total, metodo_pago, estado, num_factura, id_cliente, id_empleado
@@ -426,7 +502,7 @@ func getCompras(w http.ResponseWriter, r *http.Request) {
 	RespondJSON(w, http.StatusOK, "Compras obtenidas correctamente", compras)
 }
 
-// Handler para obtener compra por ID
+// Enpoint para obtener compra por ID
 func getCompraPorID(w http.ResponseWriter, r *http.Request) {
 	idStr, ok := ValidarIDParametro(r, w, "compra")
 	if !ok {
@@ -477,7 +553,7 @@ func getCompraPorID(w http.ResponseWriter, r *http.Request) {
 	RespondJSON(w, http.StatusOK, fmt.Sprintf("Compra %s", MsgObtenidoCorrectamente), c)
 }
 
-// Handler para crear una compra
+// Enpoint para crear una compra
 func crearCompra(w http.ResponseWriter, r *http.Request) {
 	var req CompraRequest
 	if !ValidarJSONDecodificacion(json.NewDecoder(r.Body).Decode(&req), w) {
@@ -495,7 +571,7 @@ func crearCompra(w http.ResponseWriter, r *http.Request) {
 	RespondJSON(w, http.StatusCreated, fmt.Sprintf("Compra %s", MsgCreadoCorrectamente), resultado)
 }
 
-// Handler para cancelar una compra (valido unicamente para estado completado)
+// Enpoint para cancelar una compra (valido unicamente para estado completado)
 func cancelarCompra(w http.ResponseWriter, r *http.Request) {
 	idStr, ok := ValidarIDParametro(r, w, "compra")
 	if !ok {
@@ -513,7 +589,7 @@ func cancelarCompra(w http.ResponseWriter, r *http.Request) {
 	RespondJSON(w, http.StatusOK, "Compra cancelada correctamente y stock restaurado", resultado)
 }
 
-// Handler para vista de auditoria de ventas
+// Enpoint para vista de auditoria de ventas
 func getAuditoriaVentas(w http.ResponseWriter, r *http.Request) {
 	rows, err := DB.Query(`
 		SELECT id_compra, num_factura, fecha, metodo_pago, estado, total, cliente, correo_cliente, empleado_cajero 
@@ -545,7 +621,7 @@ func getAuditoriaVentas(w http.ResponseWriter, r *http.Request) {
 	RespondJSON(w, http.StatusOK, "Auditoria de ventas obtenida correctamente", ventas)
 }
 
-// Handler para vista de rentabilidad de productos
+// Enpoint para vista de rentabilidad de productos
 func getRentabilidadProductos(w http.ResponseWriter, r *http.Request) {
 	rows, err := DB.Query(`
 		SELECT id_producto, producto, categoria, unidades_vendidas, ingresos_totales, precio_promedio_venta 
@@ -576,7 +652,7 @@ func getRentabilidadProductos(w http.ResponseWriter, r *http.Request) {
 	RespondJSON(w, http.StatusOK, "Rentabilidad de productos obtenida correctamente", productos)
 }
 
-// Handler para vista de control de stock
+// Enpoint para vista de control de stock
 func getControlStock(w http.ResponseWriter, r *http.Request) {
 	rows, err := DB.Query(`
 		SELECT id_producto, producto, categoria, proveedor, telefono_proveedor, stock_actual, fecha_vencimiento 
@@ -608,7 +684,7 @@ func getControlStock(w http.ResponseWriter, r *http.Request) {
 	RespondJSON(w, http.StatusOK, "Stock critico obtenido correctamente", productos)
 }
 
-// Handler para vista de desempeno laboral
+// Enpoint para vista de desempeno laboral
 func getDesempenoEmpleados(w http.ResponseWriter, r *http.Request) {
 	rows, err := DB.Query(`
 		SELECT id_empleado, empleado, total_transacciones, monto_total_vendido, ticket_promedio, ultima_venta 
@@ -639,7 +715,7 @@ func getDesempenoEmpleados(w http.ResponseWriter, r *http.Request) {
 	RespondJSON(w, http.StatusOK, "Desempeno de empleados obtenido correctamente", empleados)
 }
 
-// Handler para obtener todos los detalles de compra
+// Enpoint para obtener todos los detalles de compra
 func getDetalleCompras(w http.ResponseWriter, r *http.Request) {
 	rows, err := DB.Query(`
 		SELECT id_compra, id_producto, cantidad, precio_unitario, sub_total
@@ -671,7 +747,7 @@ func getDetalleCompras(w http.ResponseWriter, r *http.Request) {
 	RespondJSON(w, http.StatusOK, "Detalles de compra obtenidos correctamente", detalles)
 }
 
-// Handler para obtener detalle de compra por ID
+// Enpoint para obtener detalle de compra por ID
 func getDetalleCompraPorID(w http.ResponseWriter, r *http.Request) {
 	idStr, ok := ValidarIDParametro(r, w, "detalle de compra")
 	if !ok {

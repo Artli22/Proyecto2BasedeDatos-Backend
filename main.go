@@ -67,6 +67,8 @@ func main() {
 		switch r.Method {
 		case http.MethodGet:
 			getEmpleados(w, r)
+		case http.MethodPost:
+			crearEmpleado(w, r)
 		default:
 			RespondJSON(w, http.StatusMethodNotAllowed, "Metodo no permitido", nil)
 		}
@@ -76,6 +78,10 @@ func main() {
 		switch r.Method {
 		case http.MethodGet:
 			getEmpleadoPorID(w, r)
+		case http.MethodPut:
+			actualizarEmpleado(w, r)
+		case http.MethodDelete:
+			eliminarEmpleado(w, r)
 		default:
 			RespondJSON(w, http.StatusMethodNotAllowed, "Metodo no permitido", nil)
 		}
