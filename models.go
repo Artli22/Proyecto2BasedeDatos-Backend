@@ -138,3 +138,15 @@ type DetalleCompra struct {
     PrecioUnitario  float64 `json:"precio_unitario"`
     SubTotal        float64 `json:"sub_total"`
 }
+
+type LoginRequest struct {
+    Usuario    string `json:"usuario"`
+    Contraseña string `json:"contraseña"`
+}
+
+type LoginResponse struct {
+    Token   string `json:"token"`
+    Usuario string `json:"usuario"`
+    Rol     string `json:"rol"`
+    Message string `json:"message"`
+}

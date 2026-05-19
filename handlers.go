@@ -6,7 +6,56 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
 )
+
+// Endpoint para autenticación de usuarios
+func loginHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		RespondJSON(w, http.StatusMethodNotAllowed, "Método no permitido", nil)
+		return
+	}
+
+	var req LoginRequest
+	err := json.NewDecoder(r.Body).Decode(&req)
+	if err != nil {
+		RespondJSON(w, http.StatusBadRequest, "El cuerpo del request no es un JSON válido", nil)
+		return
+	}
+
+	if req.Usuario == "" || req.Contraseña == "" {
+		RespondJSON(w, http.StatusBadRequest, "Usuario y contraseña son requeridos", nil)
+		return
+	}
+
+	// Validar credenciales contra PostgreSQL
+	rol, err := ValidarCredenciales(req.Usuario, req.Contraseña)
+	if err != nil {
+		RespondJSON(w, http.StatusUnauthorized, "Credenciales inválidas", nil)
+		return
+	}
+
+	// Generar JWT token
+	secretKey := os.Getenv("JWT_SECRET")
+	if secretKey == "" {
+		secretKey = "tu-secret-key-default" // Fallback - cambiar en producción
+	}
+
+	token, err := GenerarToken(req.Usuario, rol, secretKey)
+	if err != nil {
+		RespondJSON(w, http.StatusInternalServerError, "Error generando token", nil)
+		return
+	}
+
+	response := LoginResponse{
+		Token:   token,
+		Usuario: req.Usuario,
+		Rol:     rol,
+		Message: "Autenticación exitosa",
+	}
+
+	RespondJSON(w, http.StatusOK, "Login exitoso", response)
+}
 
 // Enpoint para traer todos los productos
 func getProductos(w http.ResponseWriter, r *http.Request) {

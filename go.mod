@@ -2,6 +2,9 @@ module github.com/ludin/Proyectobasededatos-Backend
 
 go 1.26.2
 
-require github.com/lib/pq v1.12.3
+require (
+	github.com/golang-jwt/jwt/v5 v5.2.0
+	github.com/lib/pq v1.12.3
+)
 
-require github.com/joho/godotenv v1.5.1 // indirect
+require github.com/joho/godotenv v1.5.1

@@ -12,6 +12,9 @@ func main() {
 
 	conectarDB()
 
+	// Login - Autenticación
+	http.HandleFunc("/login", habilitarCORS(loginHandler))
+
 	// Productos 
 	http.HandleFunc("/productos", habilitarCORS(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {

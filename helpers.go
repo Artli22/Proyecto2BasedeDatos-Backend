@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"net/http"
 	"time"
+	"os"
+	"github.com/golang-jwt/jwt/v5"
 )
 
 type Respuesta struct {
@@ -388,4 +390,73 @@ func procesarCancelacionCompra(tx *sql.Tx, idStr string) (interface{}, error) {
 		"productos_restaurados":  productosRestaurados,
 		"estado":                 "cancelado",
 	}, nil
+}
+
+// Valida credenciales intentando conectar como el usuario a la base de datos
+// Retorna el rol del usuario si es exitoso
+func ValidarCredenciales(usuario, contraseña string) (string, error) {
+	dsn := fmt.Sprintf(
+		"host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
+		os.Getenv("DB_HOST"),
+		os.Getenv("DB_PORT"),
+		usuario,
+		contraseña,
+		os.Getenv("DB_NAME"),
+	)
+
+	testConn, err := sql.Open("postgres", dsn)
+	if err != nil {
+		return "", fmt.Errorf("credenciales inválidas")
+	}
+	defer testConn.Close()
+
+	// Intenta conectar para validar credenciales
+	if err := testConn.Ping(); err != nil {
+		return "", fmt.Errorf("credenciales inválidas")
+	}
+
+	// Si la conexión es exitosa, consultar el rol del usuario
+	var rol string
+	rows := testConn.QueryRow(`
+		SELECT r.rolname
+		FROM pg_user u
+		JOIN pg_auth_members am ON u.usesysid = am.member
+		JOIN pg_roles r ON r.oid = am.roleid
+		WHERE u.usename = $1
+		LIMIT 1
+	`, usuario)
+
+	if err := rows.Scan(&rol); err != nil {
+		// Si no hay rol asignado, es un usuario sin permisos especiales
+		return "", fmt.Errorf("usuario sin roles asignados")
+	}
+
+	return rol, nil
+}
+
+// Estructura para los claims del JWT
+type JWTClaims struct {
+	Usuario string `json:"usuario"`
+	Rol     string `json:"rol"`
+	jwt.RegisteredClaims
+}
+
+// Genera un token JWT con los datos del usuario
+func GenerarToken(usuario, rol, secretKey string) (string, error) {
+	claims := &JWTClaims{
+		Usuario: usuario,
+		Rol:     rol,
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(24 * time.Hour)),
+			IssuedAt:  jwt.NewNumericDate(time.Now()),
+		},
+	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	tokenString, err := token.SignedString([]byte(secretKey))
+	if err != nil {
+		return "", fmt.Errorf("error generando token")
+	}
+
+	return tokenString, nil
 }
