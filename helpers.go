@@ -393,7 +393,6 @@ func procesarCancelacionCompra(tx *sql.Tx, idStr string) (interface{}, error) {
 }
 
 // Valida credenciales intentando conectar como el usuario a la base de datos
-// Retorna el rol del usuario si es exitoso
 func ValidarCredenciales(usuario, contraseña string) (string, error) {
 	dsn := fmt.Sprintf(
 		"host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
@@ -415,7 +414,7 @@ func ValidarCredenciales(usuario, contraseña string) (string, error) {
 		return "", fmt.Errorf("credenciales inválidas")
 	}
 
-	// Si la conexión es exitosa, consultar el rol del usuario
+	// Consulta el rol del usuario para incluirlo en el token
 	var rol string
 	rows := testConn.QueryRow(`
 		SELECT r.rolname
@@ -427,14 +426,13 @@ func ValidarCredenciales(usuario, contraseña string) (string, error) {
 	`, usuario)
 
 	if err := rows.Scan(&rol); err != nil {
-		// Si no hay rol asignado, es un usuario sin permisos especiales
 		return "", fmt.Errorf("usuario sin roles asignados")
 	}
 
 	return rol, nil
 }
 
-// Estructura para los claims del JWT
+
 type JWTClaims struct {
 	Usuario string `json:"usuario"`
 	Rol     string `json:"rol"`

@@ -28,17 +28,15 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Validar credenciales contra PostgreSQL
 	rol, err := ValidarCredenciales(req.Usuario, req.Contraseña)
 	if err != nil {
 		RespondJSON(w, http.StatusUnauthorized, "Credenciales inválidas", nil)
 		return
 	}
 
-	// Generar JWT token
 	secretKey := os.Getenv("JWT_SECRET")
 	if secretKey == "" {
-		secretKey = "tu-secret-key-default" // Fallback - cambiar en producción
+		secretKey = "tu-secret-key-default" 
 	}
 
 	token, err := GenerarToken(req.Usuario, rol, secretKey)
