@@ -2,11 +2,11 @@
 package main
 
 import (
-	"database/sql"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
+	"strconv"
 )
 
 // Endpoint para autenticación de usuarios
@@ -607,15 +607,42 @@ func crearCompra(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resultado, ok := EjecutarEnTransaccion(w, func(tx *sql.Tx) (interface{}, error) {
-		return procesarNuevaCompra(tx, req)
-	})
-
-	if !ok {
+	// Convertir el slice de productos a JSON (string para que pq lo envíe como text→jsonb)
+	productosJSON, err := json.Marshal(req.Productos)
+	if err != nil {
+		RespondJSON(w, http.StatusBadRequest, "Error al procesar productos", nil)
 		return
 	}
 
-	RespondJSON(w, http.StatusCreated, fmt.Sprintf("Compra %s", MsgCreadoCorrectamente), resultado)
+	// Llamar al stored procedure sp_crear_compra_con_validacion
+	// El cast ::jsonb es necesario porque pq envía strings como text
+	var idCompra int
+	var total float64
+	var mensaje string
+
+	err = DB.QueryRow(
+		"SELECT * FROM sp_crear_compra_con_validacion($1, $2, $3, $4, $5::jsonb)",
+		req.Fecha, req.MetodoPago, req.IDCliente, req.IDEmpleado, string(productosJSON),
+	).Scan(&idCompra, &total, &mensaje)
+
+	if err != nil {
+		// err.Error() contiene el mensaje real de PostgreSQL cuando el SP lanza RAISE EXCEPTION
+		RespondJSON(w, http.StatusBadRequest, err.Error(), nil)
+		return
+	}
+
+	// p_id_compra = 0 indica error de negocio retornado por el SP
+	if idCompra == 0 {
+		RespondJSON(w, http.StatusBadRequest, mensaje, nil)
+		return
+	}
+
+	resultado := map[string]interface{}{
+		"id_compra": idCompra,
+		"total":     total,
+	}
+
+	RespondJSON(w, http.StatusCreated, mensaje, resultado)
 }
 
 // Enpoint para cancelar una compra (valido unicamente para estado completado)
@@ -625,15 +652,29 @@ func cancelarCompra(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resultado, ok := EjecutarEnTransaccion(w, func(tx *sql.Tx) (interface{}, error) {
-		return procesarCancelacionCompra(tx, idStr)
-	})
+	// Llamar al stored procedure sp_cancelar_compra
+	var success bool
+	var mensaje string
 
-	if !ok {
+	err := DB.QueryRow(
+		"SELECT * FROM sp_cancelar_compra($1)",
+		idStr,
+	).Scan(&success, &mensaje)
+
+	if err != nil {
+		RespondJSON(w, http.StatusInternalServerError, "Error al ejecutar SP", nil)
 		return
 	}
 
-	RespondJSON(w, http.StatusOK, "Compra cancelada correctamente y stock restaurado", resultado)
+	if !success {
+		RespondJSON(w, http.StatusBadRequest, mensaje, nil)
+		return
+	}
+
+	RespondJSON(w, http.StatusOK, mensaje, map[string]interface{}{
+		"id_compra": idStr,
+		"estado":    "cancelado",
+	})
 }
 
 // Enpoint para vista de auditoria de ventas
@@ -816,4 +857,164 @@ func getDetalleCompraPorID(w http.ResponseWriter, r *http.Request) {
 	}
 
 	RespondJSON(w, http.StatusOK, fmt.Sprintf("Detalle de compra %s", MsgObtenidoCorrectamente), dc)
+}
+
+// Proceso Interno: Obtener resumen de compras con totales
+func getResumenCompras(w http.ResponseWriter, r *http.Request) {
+	query := r.URL.Query()
+	idClienteStr := query.Get("id_cliente")
+	var idCliente interface{} = nil
+
+	if idClienteStr != "" {
+		id, err := strconv.Atoi(idClienteStr)
+		if err != nil {
+			RespondJSON(w, http.StatusBadRequest, "ID de cliente inválido", nil)
+			return
+		}
+		idCliente = id
+	}
+
+	var totalCompras int
+	var montoTotal *float64
+	var montoPromedio *float64
+	var mensaje string
+
+	err := DB.QueryRow(
+		"SELECT * FROM sp_obtener_resumen_compras($1)",
+		idCliente,
+	).Scan(&totalCompras, &montoTotal, &montoPromedio, &mensaje)
+
+	if err != nil {
+		RespondJSON(w, http.StatusInternalServerError, "Error al ejecutar SP", nil)
+		return
+	}
+
+	mTotal := 0.0
+	if montoTotal != nil {
+		mTotal = *montoTotal
+	}
+
+	mPromedio := 0.0
+	if montoPromedio != nil {
+		mPromedio = *montoPromedio
+	}
+
+	resultado := map[string]interface{}{
+		"total_compras":     totalCompras,
+		"monto_total":       mTotal,
+		"monto_promedio":    mPromedio,
+		"mensaje":           mensaje,
+	}
+
+	RespondJSON(w, http.StatusOK, "Resumen de compras obtenido", resultado)
+}
+
+// Proceso Interno: Obtener reporte de inventario crítico
+func getReporteInventarioCritico(w http.ResponseWriter, r *http.Request) {
+	query := r.URL.Query()
+	limitStockStr := query.Get("limite_stock")
+	limitStock := 20 // valor por defecto
+
+	if limitStockStr != "" {
+		limite, err := strconv.Atoi(limitStockStr)
+		if err != nil {
+			RespondJSON(w, http.StatusBadRequest, "Límite de stock inválido", nil)
+			return
+		}
+		limitStock = limite
+	}
+
+	var totalProductos int
+	var mensaje string
+
+	err := DB.QueryRow(
+		"SELECT * FROM sp_reporte_inventario_critico($1)",
+		limitStock,
+	).Scan(&totalProductos, &mensaje)
+
+	if err != nil {
+		RespondJSON(w, http.StatusInternalServerError, "Error al ejecutar SP", nil)
+		return
+	}
+
+	// Obtener la lista de productos con stock crítico
+	rows, err := DB.Query(`
+		SELECT id_producto, producto, categoria, proveedor, telefono_proveedor, stock_actual, fecha_vencimiento
+		FROM vista_stock_critico
+		WHERE stock_actual < $1
+		ORDER BY stock_actual ASC
+	`, limitStock)
+
+	if err != nil {
+		RespondJSON(w, http.StatusInternalServerError, "Error al consultar productos", nil)
+		return
+	}
+	defer rows.Close()
+
+	type ProductoCritico struct {
+		IDProducto         int     `json:"id_producto"`
+		Nombre             string  `json:"nombre"`
+		Categoria          string  `json:"categoria"`
+		Proveedor          string  `json:"proveedor"`
+		TelefonoProveedor  string  `json:"telefono_proveedor"`
+		StockActual        int     `json:"stock_actual"`
+		FechaVencimiento   *string `json:"fecha_vencimiento"`
+	}
+
+	productos := []ProductoCritico{}
+	for rows.Next() {
+		var p ProductoCritico
+		err := rows.Scan(&p.IDProducto, &p.Nombre, &p.Categoria, &p.Proveedor,
+			&p.TelefonoProveedor, &p.StockActual, &p.FechaVencimiento)
+		if err != nil {
+			RespondJSON(w, http.StatusInternalServerError, "Error al leer producto", nil)
+			return
+		}
+		productos = append(productos, p)
+	}
+
+	resultado := map[string]interface{}{
+		"total_productos": totalProductos,
+		"mensaje":         mensaje,
+		"productos":       productos,
+	}
+
+	RespondJSON(w, http.StatusOK, "Reporte de inventario crítico", resultado)
+}
+
+// Proceso Interno: Obtener cliente con historial de compras
+func getClienteConHistorial(w http.ResponseWriter, r *http.Request) {
+	idStr, ok := ValidarIDParametro(r, w, "cliente")
+	if !ok {
+		return
+	}
+
+	var nombreCliente string
+	var telefonoCliente string
+	var correoCliente string
+	var totalCompras int
+	var montoTotalGastado float64
+	var mensaje string
+
+	err := DB.QueryRow(
+		"SELECT * FROM sp_obtener_cliente_con_historial($1)",
+		idStr,
+	).Scan(&nombreCliente, &telefonoCliente, &correoCliente,
+		&totalCompras, &montoTotalGastado, &mensaje)
+
+	if err != nil {
+		RespondJSON(w, http.StatusInternalServerError, "Error al ejecutar SP", nil)
+		return
+	}
+
+	resultado := map[string]interface{}{
+		"nombre_cliente":           nombreCliente,
+		"telefono_cliente":         telefonoCliente,
+		"correo_cliente":           correoCliente,
+		"total_compras":            totalCompras,
+		"monto_total_gastado":      montoTotalGastado,
+		"mensaje":                  mensaje,
+	}
+
+	RespondJSON(w, http.StatusOK, "Historial del cliente obtenido", resultado)
 }

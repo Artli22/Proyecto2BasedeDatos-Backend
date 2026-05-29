@@ -207,6 +207,34 @@ func main() {
 		}
 	}))
 
+	// Rutas para Stored Procedures
+	http.HandleFunc("/reportes/resumen-compras", habilitarCORS(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			getResumenCompras(w, r)
+		default:
+			RespondJSON(w, http.StatusMethodNotAllowed, "Metodo no permitido", nil)
+		}
+	}))
+
+	http.HandleFunc("/reportes/inventario-critico", habilitarCORS(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			getReporteInventarioCritico(w, r)
+		default:
+			RespondJSON(w, http.StatusMethodNotAllowed, "Metodo no permitido", nil)
+		}
+	}))
+
+	http.HandleFunc("/clientes/historial", habilitarCORS(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			getClienteConHistorial(w, r)
+		default:
+			RespondJSON(w, http.StatusMethodNotAllowed, "Metodo no permitido", nil)
+		}
+	}))
+
 	fmt.Println("Servidor corriendo en puerto 8080")
 	if err := http.ListenAndServe(":8080", nil); err != nil {
 		fmt.Println("Error al iniciar servidor:", err)

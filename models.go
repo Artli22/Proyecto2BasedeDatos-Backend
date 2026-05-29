@@ -29,14 +29,14 @@ type Proveedor struct {
 }
 
 type Compra struct {
-	IDCompra   int `json:"id_compra"`
-	Fecha       string `json:"fecha"`
-	Total       float64 `json:"total"`
+	IDCompra   int     `json:"id_compra"`
+	Fecha      string  `json:"fecha"`
+	Total      float64 `json:"total"`
 	MetodoPago *string `json:"metodo_pago"`
-	Estado      *string `json:"estado"`
-	NumFactura string `json:"num_factura"`
-	IDCliente 	int `json:"id_cliente"`
-	IDEmpleado int `json:"id_empleado"`
+	Estado     *string `json:"estado"`
+	NumFactura *string `json:"num_factura"`
+	IDCliente  int     `json:"id_cliente"`
+	IDEmpleado int     `json:"id_empleado"`
 }
 
 type Producto struct {
@@ -85,15 +85,15 @@ type CompraDetalle struct {
 }
 
 type AuditoriaVenta struct {
-    IDCompra      int     `json:"id_compra"`
-    NumFactura    string  `json:"num_factura"`
-    Fecha         string  `json:"fecha"`
-    MetodoPago    *string `json:"metodo_pago"`
-    Estado        *string `json:"estado"`
-    Total         float64 `json:"total"`
-    Cliente       string  `json:"cliente"`
-    CorreoCliente *string `json:"correo_cliente"`
-    EmpleadoCajero string `json:"empleado_cajero"`
+    IDCompra       int     `json:"id_compra"`
+    NumFactura     *string `json:"num_factura"`
+    Fecha          string  `json:"fecha"`
+    MetodoPago     *string `json:"metodo_pago"`
+    Estado         *string `json:"estado"`
+    Total          float64 `json:"total"`
+    Cliente        string  `json:"cliente"`
+    CorreoCliente  *string `json:"correo_cliente"`
+    EmpleadoCajero string  `json:"empleado_cajero"`
 }
 
 type DetalleTemp struct {
