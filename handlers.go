@@ -56,33 +56,15 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // Enpoint para traer todos los productos
+// Enpoint para traer todos los productos con GORM
 func getProductos(w http.ResponseWriter, r *http.Request) {
-	rows, err := DB.Query(`
-		SELECT id_producto, nombre, descripcion, precio_actual, 
-		fecha_vencimiento, imagen, stock, activo, id_categoria, id_proveedor 
-		FROM producto
-	`)
-	if err != nil {
+	var productos []Producto
+	// GORM: Leer todos los productos activos de la base de datos
+	result := DB.Where("activo = ?", true).Find(&productos)
+	if result.Error != nil {
 		RespondJSON(w, http.StatusInternalServerError,
 			"Error al consultar productos en la base de datos", nil)
 		return
-	}
-	defer rows.Close()
-
-	productos := []Producto{}
-	for rows.Next() {
-		var p Producto
-		err := rows.Scan(
-			&p.IDProducto, &p.Nombre, &p.Descripcion,
-			&p.PrecioActual, &p.FechaVencimiento, &p.Imagen,
-			&p.Stock, &p.Activo, &p.IDCategoria, &p.IDProveedor,
-		)
-		if err != nil {
-			RespondJSON(w, http.StatusInternalServerError,
-				"Error al leer fila de producto", nil)
-			return
-		}
-		productos = append(productos, p)
 	}
 
 	RespondJSON(w, http.StatusOK, "Productos obtenidos correctamente", productos)
@@ -103,31 +85,27 @@ func getProductoPorID(w http.ResponseWriter, r *http.Request) {
 	RespondJSON(w, http.StatusOK, fmt.Sprintf("Producto %s", MsgObtenidoCorrectamente), p)
 }
 
-// Enpoint para crear un producto
+// Enpoint para crear un producto con GORM
 func crearProducto(w http.ResponseWriter, r *http.Request) {
 	var p Producto
 	if !ValidarJSONDecodificacion(json.NewDecoder(r.Body).Decode(&p), w) {
 		return
 	}
 
-	err := DB.QueryRow(`
-		INSERT INTO producto (nombre, descripcion, precio_actual, fecha_vencimiento, imagen, stock, id_categoria, id_proveedor)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-		RETURNING id_producto
-	`,
-		p.Nombre, p.Descripcion, p.PrecioActual,
-		p.FechaVencimiento, p.Imagen, p.Stock,
-		p.IDCategoria, p.IDProveedor,
-	).Scan(&p.IDProducto)
+	// GORM: Establecer activo como true por defecto
+	p.Activo = true
+	// GORM: Crear el producto en la base de datos
+	result := DB.Create(&p)
 
-	if ManejarErrorInsertActualizar(err, w, "insert", "producto") {
+	if result.Error != nil {
+		ManejarErrorInsertActualizar(result.Error, w, "insert", "producto")
 		return
 	}
 
 	RespondJSON(w, http.StatusCreated, fmt.Sprintf("Producto %s", MsgCreadoCorrectamente), p)
 }
 
-// Enpoint para actualizar un producto
+// Enpoint para actualizar un producto con GORM
 func actualizarProducto(w http.ResponseWriter, r *http.Request) {
 	idStr, ok := ValidarIDParametro(r, w, "producto")
 	if !ok {
@@ -139,22 +117,19 @@ func actualizarProducto(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result, err := DB.Exec(`
-		UPDATE producto 
-		SET nombre=$1, descripcion=$2, precio_actual=$3, fecha_vencimiento=$4,
-			imagen=$5, stock=$6, id_categoria=$7, id_proveedor=$8, activo=$9
-		WHERE id_producto=$10
-	`,
-		p.Nombre, p.Descripcion, p.PrecioActual,
-		p.FechaVencimiento, p.Imagen, p.Stock,
-		p.IDCategoria, p.IDProveedor, p.Activo, idStr,
-	)
+	// Convertir string a int
+	id := convertStringToInt(idStr)
+	
+	// GORM: Actualizar solo los campos no cero en el struct
+	result := DB.Model(&Producto{}).Where("id_producto = ?", id).Updates(p)
 
-	if ManejarErrorInsertActualizar(err, w, "update", "producto") {
+	if result.Error != nil {
+		ManejarErrorInsertActualizar(result.Error, w, "update", "producto")
 		return
 	}
 
-	if !ValidarFilasAfectadas(result, w, "Producto") {
+	if result.RowsAffected == 0 {
+		RespondJSON(w, http.StatusNotFound, "Producto no encontrado", nil)
 		return
 	}
 
@@ -168,16 +143,16 @@ func eliminarProducto(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result, err := DB.Exec(
-		"UPDATE producto SET activo = FALSE WHERE id_producto = $1 AND activo = TRUE",
-		idStr,
-	)
+	id := convertStringToInt(idStr)
+	result := DB.Model(&Producto{}).Where("id_producto = ? AND activo = ?", id, true).Update("activo", false)
 
-	if ManejarErrorInsertActualizar(err, w, "delete", "producto") {
+	if result.Error != nil {
+		ManejarErrorInsertActualizar(result.Error, w, "delete", "producto")
 		return
 	}
 
-	if !ValidarFilasAfectadas(result, w, "Producto") {
+	if result.RowsAffected == 0 {
+		RespondJSON(w, http.StatusNotFound, "Producto no encontrado", nil)
 		return
 	}
 
@@ -186,29 +161,12 @@ func eliminarProducto(w http.ResponseWriter, r *http.Request) {
 
 // Enpoint para traer todos los clientes
 func getClientes(w http.ResponseWriter, r *http.Request) {
-	rows, err := DB.Query(`
-		SELECT id_cliente, nombre, telefono, correo, activo
-		FROM cliente
-	`)
-	if err != nil {
+	var clientes []Cliente
+	result := DB.Find(&clientes)
+	if result.Error != nil {
 		RespondJSON(w, http.StatusInternalServerError,
 			"Error al consultar clientes en la base de datos", nil)
 		return
-	}
-	defer rows.Close()
-
-	clientes := []Cliente{}
-	for rows.Next() {
-		var c Cliente
-		err := rows.Scan(
-			&c.IdCliente, &c.Nombre, &c.Telefono, &c.Correo, &c.Activo,
-		)
-		if err != nil {
-			RespondJSON(w, http.StatusInternalServerError,
-				"Error al leer fila de cliente", nil)
-			return
-		}
-		clientes = append(clientes, c)
 	}
 
 	RespondJSON(w, http.StatusOK, "Clientes obtenidos correctamente", clientes)
@@ -236,15 +194,9 @@ func crearCliente(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err := DB.QueryRow(`
-		INSERT INTO cliente (nombre, telefono, correo)
-		VALUES ($1, $2, $3)
-		RETURNING id_cliente
-	`,
-		c.Nombre, c.Telefono, c.Correo,
-	).Scan(&c.IdCliente)
-
-	if ManejarErrorInsertActualizar(err, w, "insert", "cliente") {
+	result := DB.Create(&c)
+	if result.Error != nil {
+		ManejarErrorInsertActualizar(result.Error, w, "insert", "cliente")
 		return
 	}
 
@@ -263,19 +215,16 @@ func actualizarCliente(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result, err := DB.Exec(`
-		UPDATE cliente 
-		SET nombre=$1, telefono=$2, correo=$3, activo=$4
-		WHERE id_cliente=$5
-	`,
-		c.Nombre, c.Telefono, c.Correo, c.Activo, idStr,
-	)
+	id := convertStringToInt(idStr)
+	result := DB.Model(&Cliente{}).Where("id_cliente = ?", id).Updates(c)
 
-	if ManejarErrorInsertActualizar(err, w, "update", "cliente") {
+	if result.Error != nil {
+		ManejarErrorInsertActualizar(result.Error, w, "update", "cliente")
 		return
 	}
 
-	if !ValidarFilasAfectadas(result, w, "Cliente") {
+	if result.RowsAffected == 0 {
+		RespondJSON(w, http.StatusNotFound, "Cliente no encontrado", nil)
 		return
 	}
 
@@ -289,16 +238,16 @@ func eliminarCliente(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result, err := DB.Exec(
-		"UPDATE cliente SET activo = FALSE WHERE id_cliente = $1 AND activo = TRUE",
-		idStr,
-	)
+	id := convertStringToInt(idStr)
+	result := DB.Model(&Cliente{}).Where("id_cliente = ? AND activo = ?", id, true).Update("activo", false)
 
-	if ManejarErrorInsertActualizar(err, w, "delete", "cliente") {
+	if result.Error != nil {
+		ManejarErrorInsertActualizar(result.Error, w, "delete", "cliente")
 		return
 	}
 
-	if !ValidarFilasAfectadas(result, w, "Cliente") {
+	if result.RowsAffected == 0 {
+		RespondJSON(w, http.StatusNotFound, "Cliente no encontrado", nil)
 		return
 	}
 
@@ -307,29 +256,12 @@ func eliminarCliente(w http.ResponseWriter, r *http.Request) {
 
 // Enpoint para traer todos los empleados
 func getEmpleados(w http.ResponseWriter, r *http.Request) {
-	rows, err := DB.Query(`
-		SELECT id_empleado, nombre, telefono, correo, activo
-		FROM empleado
-	`)
-	if err != nil {
+	var empleados []Empleado
+	result := DB.Find(&empleados)
+	if result.Error != nil {
 		RespondJSON(w, http.StatusInternalServerError,
 			"Error al consultar empleados en la base de datos", nil)
 		return
-	}
-	defer rows.Close()
-
-	empleados := []Empleado{}
-	for rows.Next() {
-		var e Empleado
-		err := rows.Scan(
-			&e.IdEmpleado, &e.Nombre, &e.Telefono, &e.Correo, &e.Activo,
-		)
-		if err != nil {
-			RespondJSON(w, http.StatusInternalServerError,
-				"Error al leer fila de empleado", nil)
-			return
-		}
-		empleados = append(empleados, e)
 	}
 
 	RespondJSON(w, http.StatusOK, "Empleados obtenidos correctamente", empleados)
@@ -357,15 +289,9 @@ func crearEmpleado(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err := DB.QueryRow(`
-		INSERT INTO empleado (nombre, telefono, correo)
-		VALUES ($1, $2, $3)
-		RETURNING id_empleado
-	`,
-		e.Nombre, e.Telefono, e.Correo,
-	).Scan(&e.IdEmpleado)
-
-	if ManejarErrorInsertActualizar(err, w, "insert", "empleado") {
+	result := DB.Create(&e)
+	if result.Error != nil {
+		ManejarErrorInsertActualizar(result.Error, w, "insert", "empleado")
 		return
 	}
 
@@ -384,19 +310,16 @@ func actualizarEmpleado(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result, err := DB.Exec(`
-		UPDATE empleado 
-		SET nombre=$1, telefono=$2, correo=$3, activo=$4
-		WHERE id_empleado=$5
-	`,
-		e.Nombre, e.Telefono, e.Correo, e.Activo, idStr,
-	)
+	id := convertStringToInt(idStr)
+	result := DB.Model(&Empleado{}).Where("id_empleado = ?", id).Updates(e)
 
-	if ManejarErrorInsertActualizar(err, w, "update", "empleado") {
+	if result.Error != nil {
+		ManejarErrorInsertActualizar(result.Error, w, "update", "empleado")
 		return
 	}
 
-	if !ValidarFilasAfectadas(result, w, "Empleado") {
+	if result.RowsAffected == 0 {
+		RespondJSON(w, http.StatusNotFound, "Empleado no encontrado", nil)
 		return
 	}
 
@@ -410,16 +333,16 @@ func eliminarEmpleado(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result, err := DB.Exec(
-		"UPDATE empleado SET activo = FALSE WHERE id_empleado = $1 AND activo = TRUE",
-		idStr,
-	)
+	id := convertStringToInt(idStr)
+	result := DB.Model(&Empleado{}).Where("id_empleado = ? AND activo = ?", id, true).Update("activo", false)
 
-	if ManejarErrorInsertActualizar(err, w, "delete", "empleado") {
+	if result.Error != nil {
+		ManejarErrorInsertActualizar(result.Error, w, "delete", "empleado")
 		return
 	}
 
-	if !ValidarFilasAfectadas(result, w, "Empleado") {
+	if result.RowsAffected == 0 {
+		RespondJSON(w, http.StatusNotFound, "Empleado no encontrado", nil)
 		return
 	}
 
@@ -428,29 +351,12 @@ func eliminarEmpleado(w http.ResponseWriter, r *http.Request) {
 
 // Enpoint para traer todos los proveedores
 func getProveedores(w http.ResponseWriter, r *http.Request) {
-	rows, err := DB.Query(`
-		SELECT id_proveedor, nombre, telefono, correo, activo
-		FROM proveedor
-	`)
-	if err != nil {
+	var proveedores []Proveedor
+	result := DB.Find(&proveedores)
+	if result.Error != nil {
 		RespondJSON(w, http.StatusInternalServerError,
 			"Error al consultar proveedores en la base de datos", nil)
 		return
-	}
-	defer rows.Close()
-
-	proveedores := []Proveedor{}
-	for rows.Next() {
-		var prov Proveedor
-		err := rows.Scan(
-			&prov.IDProveedor, &prov.Nombre, &prov.Telefono, &prov.Correo, &prov.Activo,
-		)
-		if err != nil {
-			RespondJSON(w, http.StatusInternalServerError,
-				"Error al leer fila de proveedor", nil)
-			return
-		}
-		proveedores = append(proveedores, prov)
 	}
 
 	RespondJSON(w, http.StatusOK, "Proveedores obtenidos correctamente", proveedores)
@@ -473,29 +379,12 @@ func getProveedorPorID(w http.ResponseWriter, r *http.Request) {
 
 // Enpoint para traer todas las categorias
 func getCategorias(w http.ResponseWriter, r *http.Request) {
-	rows, err := DB.Query(`
-		SELECT id_categoria, nombre
-		FROM categoria
-	`)
-	if err != nil {
+	var categorias []Categoria
+	result := DB.Find(&categorias)
+	if result.Error != nil {
 		RespondJSON(w, http.StatusInternalServerError,
 			"Error al consultar categorias en la base de datos", nil)
 		return
-	}
-	defer rows.Close()
-
-	categorias := []Categoria{}
-	for rows.Next() {
-		var c Categoria
-		err := rows.Scan(
-			&c.IdCategoria, &c.Nombre,
-		)
-		if err != nil {
-			RespondJSON(w, http.StatusInternalServerError,
-				"Error al leer fila de categoria", nil)
-			return
-		}
-		categorias = append(categorias, c)
 	}
 
 	RespondJSON(w, http.StatusOK, "Categorias obtenidas correctamente", categorias)
@@ -518,32 +407,12 @@ func getCategoriaPorID(w http.ResponseWriter, r *http.Request) {
 
 // Enpoint para obtener todas las compras
 func getCompras(w http.ResponseWriter, r *http.Request) {
-	rows, err := DB.Query(`
-		SELECT id_compra, fecha, total, metodo_pago, estado, num_factura, id_cliente, id_empleado
-		FROM compra
-		ORDER BY fecha DESC
-	`)
-	if err != nil {
+	var compras []Compra
+	result := DB.Order("fecha DESC").Find(&compras)
+	if result.Error != nil {
 		RespondJSON(w, http.StatusInternalServerError,
 			"Error al consultar compras", nil)
 		return
-	}
-	defer rows.Close()
-
-	compras := []Compra{}
-	for rows.Next() {
-		var c Compra
-		err := rows.Scan(
-			&c.IDCompra, &c.Fecha, &c.Total,
-			&c.MetodoPago, &c.Estado, &c.NumFactura,
-			&c.IDCliente, &c.IDEmpleado,
-		)
-		if err != nil {
-			RespondJSON(w, http.StatusInternalServerError,
-				"Error al leer fila de compra", nil)
-			return
-		}
-		compras = append(compras, c)
 	}
 
 	RespondJSON(w, http.StatusOK, "Compras obtenidas correctamente", compras)
@@ -557,29 +426,26 @@ func getCompraPorID(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var c CompraDetalle
-	err := DB.QueryRow(`
+	err := DB.Raw(`
 		SELECT c.id_compra, c.fecha, c.total, c.metodo_pago, c.estado, c.num_factura,
 		       cl.nombre AS cliente, e.nombre AS empleado
 		FROM compra c
 		JOIN cliente cl ON c.id_cliente = cl.id_cliente
 		JOIN empleado e ON c.id_empleado = e.id_empleado
-		WHERE c.id_compra = $1
-	`, idStr).Scan(
-		&c.IDCompra, &c.Fecha, &c.Total,
-		&c.MetodoPago, &c.Estado, &c.NumFactura,
-		&c.Cliente, &c.Empleado,
-	)
+		WHERE c.id_compra = ?
+	`, idStr).Scan(&c).Error
 
-	if ManejarErrorConsulta(err, w, "Compra") {
+	if err != nil {
+		ManejarErrorConsulta(err, w, "Compra")
 		return
 	}
 
-	rows, err := DB.Query(`
+	rows, err := DB.Raw(`
 		SELECT p.nombre, dc.cantidad, dc.precio_unitario, dc.sub_total
 		FROM detalle_compra dc
 		JOIN producto p ON dc.id_producto = p.id_producto
-		WHERE dc.id_compra = $1
-	`, idStr)
+		WHERE dc.id_compra = ?
+	`, idStr).Rows()
 	if err != nil {
 		RespondJSON(w, http.StatusInternalServerError,
 			"Error al consultar detalle de compra", nil)
@@ -620,10 +486,10 @@ func crearCompra(w http.ResponseWriter, r *http.Request) {
 	var total float64
 	var mensaje string
 
-	err = DB.QueryRow(
+	err = DB.Raw(
 		"SELECT * FROM sp_crear_compra_con_validacion($1, $2, $3, $4, $5::jsonb)",
 		req.Fecha, req.MetodoPago, req.IDCliente, req.IDEmpleado, string(productosJSON),
-	).Scan(&idCompra, &total, &mensaje)
+	).Scan(map[string]interface{}{"id_compra": &idCompra, "total": &total, "mensaje": &mensaje}).Error
 
 	if err != nil {
 		// err.Error() contiene el mensaje real de PostgreSQL cuando el SP lanza RAISE EXCEPTION
@@ -656,10 +522,10 @@ func cancelarCompra(w http.ResponseWriter, r *http.Request) {
 	var success bool
 	var mensaje string
 
-	err := DB.QueryRow(
+	err := DB.Raw(
 		"SELECT * FROM sp_cancelar_compra($1)",
 		idStr,
-	).Scan(&success, &mensaje)
+	).Scan(map[string]interface{}{"success": &success, "mensaje": &mensaje}).Error
 
 	if err != nil {
 		RespondJSON(w, http.StatusInternalServerError, "Error al ejecutar SP", nil)
@@ -679,10 +545,10 @@ func cancelarCompra(w http.ResponseWriter, r *http.Request) {
 
 // Enpoint para vista de auditoria de ventas
 func getAuditoriaVentas(w http.ResponseWriter, r *http.Request) {
-	rows, err := DB.Query(`
+	rows, err := DB.Raw(`
 		SELECT id_compra, num_factura, fecha, metodo_pago, estado, total, cliente, correo_cliente, empleado_cajero 
 		FROM vista_auditoria_completa_ventas
-	`)
+	`).Rows()
 	if err != nil {
 		RespondJSON(w, http.StatusInternalServerError,
 			"Error al consultar auditoria de ventas", nil)
@@ -711,10 +577,10 @@ func getAuditoriaVentas(w http.ResponseWriter, r *http.Request) {
 
 // Enpoint para vista de rentabilidad de productos
 func getRentabilidadProductos(w http.ResponseWriter, r *http.Request) {
-	rows, err := DB.Query(`
+	rows, err := DB.Raw(`
 		SELECT id_producto, producto, categoria, unidades_vendidas, ingresos_totales, precio_promedio_venta 
 		FROM vista_rentabilidad_productos
-	`)
+	`).Rows()
 	if err != nil {
 		RespondJSON(w, http.StatusInternalServerError,
 			"Error al consultar rentabilidad de productos", nil)
@@ -742,10 +608,10 @@ func getRentabilidadProductos(w http.ResponseWriter, r *http.Request) {
 
 // Enpoint para vista de control de stock
 func getControlStock(w http.ResponseWriter, r *http.Request) {
-	rows, err := DB.Query(`
+	rows, err := DB.Raw(`
 		SELECT id_producto, producto, categoria, proveedor, telefono_proveedor, stock_actual, fecha_vencimiento 
 		FROM vista_stock_critico
-	`)
+	`).Rows()
 	if err != nil {
 		RespondJSON(w, http.StatusInternalServerError,
 			"Error al consultar stock critico", nil)
@@ -774,10 +640,10 @@ func getControlStock(w http.ResponseWriter, r *http.Request) {
 
 // Enpoint para vista de desempeno laboral
 func getDesempenoEmpleados(w http.ResponseWriter, r *http.Request) {
-	rows, err := DB.Query(`
+	rows, err := DB.Raw(`
 		SELECT id_empleado, empleado, total_transacciones, monto_total_vendido, ticket_promedio, ultima_venta 
 		FROM vista_desempeno_empleados
-	`)
+	`).Rows()
 	if err != nil {
 		RespondJSON(w, http.StatusInternalServerError,
 			"Error al consultar desempeno de empleados", nil)
@@ -805,11 +671,11 @@ func getDesempenoEmpleados(w http.ResponseWriter, r *http.Request) {
 
 // Enpoint para obtener todos los detalles de compra
 func getDetalleCompras(w http.ResponseWriter, r *http.Request) {
-	rows, err := DB.Query(`
+	rows, err := DB.Raw(`
 		SELECT id_compra, id_producto, cantidad, precio_unitario, sub_total
 		FROM detalle_compra
 		ORDER BY id_compra DESC, id_producto ASC
-	`)
+	`).Rows()
 	if err != nil {
 		RespondJSON(w, http.StatusInternalServerError,
 			"Error al consultar detalles de compra", nil)
@@ -843,14 +709,11 @@ func getDetalleCompraPorID(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var dc DetalleCompra
-	err := DB.QueryRow(`
+	err := DB.Raw(`
 		SELECT id_compra, id_producto, cantidad, precio_unitario, sub_total
-		FROM detalle_compra WHERE id_compra = $1
+		FROM detalle_compra WHERE id_compra = ?
 		LIMIT 1
-	`, idStr).Scan(
-		&dc.IDCompra, &dc.IDProducto, &dc.Cantidad,
-		&dc.PrecioUnitario, &dc.SubTotal,
-	)
+	`, idStr).Scan(&dc).Error
 
 	if ManejarErrorConsulta(err, w, "Detalle de compra") {
 		return
@@ -879,10 +742,10 @@ func getResumenCompras(w http.ResponseWriter, r *http.Request) {
 	var montoPromedio *float64
 	var mensaje string
 
-	err := DB.QueryRow(
-		"SELECT * FROM sp_obtener_resumen_compras($1)",
+	err := DB.Raw(
+		"SELECT * FROM sp_obtener_resumen_compras(?)",
 		idCliente,
-	).Scan(&totalCompras, &montoTotal, &montoPromedio, &mensaje)
+	).Scan(map[string]interface{}{"total_compras": &totalCompras, "monto_total": &montoTotal, "monto_promedio": &montoPromedio, "mensaje": &mensaje}).Error
 
 	if err != nil {
 		RespondJSON(w, http.StatusInternalServerError, "Error al ejecutar SP", nil)
@@ -927,10 +790,10 @@ func getReporteInventarioCritico(w http.ResponseWriter, r *http.Request) {
 	var totalProductos int
 	var mensaje string
 
-	err := DB.QueryRow(
-		"SELECT * FROM sp_reporte_inventario_critico($1)",
+	err := DB.Raw(
+		"SELECT * FROM sp_reporte_inventario_critico(?)",
 		limitStock,
-	).Scan(&totalProductos, &mensaje)
+	).Scan(map[string]interface{}{"total_productos": &totalProductos, "mensaje": &mensaje}).Error
 
 	if err != nil {
 		RespondJSON(w, http.StatusInternalServerError, "Error al ejecutar SP", nil)
@@ -938,12 +801,12 @@ func getReporteInventarioCritico(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Obtener la lista de productos con stock crítico
-	rows, err := DB.Query(`
+	rows, err := DB.Raw(`
 		SELECT id_producto, producto, categoria, proveedor, telefono_proveedor, stock_actual, fecha_vencimiento
 		FROM vista_stock_critico
-		WHERE stock_actual < $1
+		WHERE stock_actual < ?
 		ORDER BY stock_actual ASC
-	`, limitStock)
+	`, limitStock).Rows()
 
 	if err != nil {
 		RespondJSON(w, http.StatusInternalServerError, "Error al consultar productos", nil)
@@ -996,11 +859,10 @@ func getClienteConHistorial(w http.ResponseWriter, r *http.Request) {
 	var montoTotalGastado float64
 	var mensaje string
 
-	err := DB.QueryRow(
-		"SELECT * FROM sp_obtener_cliente_con_historial($1)",
+	err := DB.Raw(
+		"SELECT * FROM sp_obtener_cliente_con_historial(?)",
 		idStr,
-	).Scan(&nombreCliente, &telefonoCliente, &correoCliente,
-		&totalCompras, &montoTotalGastado, &mensaje)
+	).Scan(map[string]interface{}{"nombre_cliente": &nombreCliente, "telefono_cliente": &telefonoCliente, "correo_cliente": &correoCliente, "total_compras": &totalCompras, "monto_total_gastado": &montoTotalGastado, "mensaje": &mensaje}).Error
 
 	if err != nil {
 		RespondJSON(w, http.StatusInternalServerError, "Error al ejecutar SP", nil)

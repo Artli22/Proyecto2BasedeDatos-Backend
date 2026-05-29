@@ -1,55 +1,79 @@
 package main 
 type Cliente struct {
-	IdCliente int `json:"id_cliente"`
-	Nombre 	   string `json:"nombre"`
-	Telefono   *string `json:"telefono"`
-	Correo     *string `json:"correo"`
-	Activo     bool `json:"activo"`
+	IdCliente int `gorm:"primaryKey;column:id_cliente" json:"id_cliente"`
+	Nombre 	   string `gorm:"column:nombre" json:"nombre"`
+	Telefono   *string `gorm:"column:telefono" json:"telefono"`
+	Correo     *string `gorm:"column:correo" json:"correo"`
+	Activo     bool `gorm:"column:activo" json:"activo"`
+}
+
+func (Cliente) TableName() string {
+	return "cliente"
 }
 
 type Empleado struct {
-	IdEmpleado int `json:"id_empleado"`
-	Nombre      string `json:"nombre"`
-	Telefono    *string `json:"telefono"`
-	Correo      *string `json:"correo"`
-	Activo      bool `json:"activo"`
+	IdEmpleado int `gorm:"primaryKey;column:id_empleado" json:"id_empleado"`
+	Nombre      string `gorm:"column:nombre" json:"nombre"`
+	Telefono    *string `gorm:"column:telefono" json:"telefono"`
+	Correo      *string `gorm:"column:correo" json:"correo"`
+	Activo      bool `gorm:"column:activo" json:"activo"`
+}
+
+func (Empleado) TableName() string {
+	return "empleado"
 }
 
 type Categoria struct {
-	IdCategoria int `json:"id_categoria"`
-	Nombre       string `json:"nombre"`
+	IdCategoria int `gorm:"primaryKey;column:id_categoria" json:"id_categoria"`
+	Nombre       string `gorm:"column:nombre" json:"nombre"`
+}
+
+func (Categoria) TableName() string {
+	return "categoria"
 }
 
 type Proveedor struct {
-	IDProveedor int `json:"id_proveedor"`
-	Nombre        string `json:"nombre"`
-	Telefono      *string `json:"telefono"`
-	Correo        *string `json:"correo"`
-	Activo        bool `json:"activo"`
+	IDProveedor int `gorm:"primaryKey;column:id_proveedor" json:"id_proveedor"`
+	Nombre        string `gorm:"column:nombre" json:"nombre"`
+	Telefono      *string `gorm:"column:telefono" json:"telefono"`
+	Correo        *string `gorm:"column:correo" json:"correo"`
+	Activo        bool `gorm:"column:activo" json:"activo"`
+}
+
+func (Proveedor) TableName() string {
+	return "proveedor"
 }
 
 type Compra struct {
-	IDCompra   int     `json:"id_compra"`
-	Fecha      string  `json:"fecha"`
-	Total      float64 `json:"total"`
-	MetodoPago *string `json:"metodo_pago"`
-	Estado     *string `json:"estado"`
-	NumFactura *string `json:"num_factura"`
-	IDCliente  int     `json:"id_cliente"`
-	IDEmpleado int     `json:"id_empleado"`
+	IDCompra   int `gorm:"primaryKey;column:id_compra" json:"id_compra"`
+	Fecha      string `gorm:"column:fecha" json:"fecha"`
+	Total      float64 `gorm:"column:total" json:"total"`
+	MetodoPago *string `gorm:"column:metodo_pago" json:"metodo_pago"`
+	Estado     *string `gorm:"column:estado" json:"estado"`
+	NumFactura *string `gorm:"column:num_factura" json:"num_factura"`
+	IDCliente  int `gorm:"column:id_cliente" json:"id_cliente"`
+	IDEmpleado int `gorm:"column:id_empleado" json:"id_empleado"`
+}
+
+func (Compra) TableName() string {
+	return "compra"
 }
 
 type Producto struct {
-    IDProducto       int      `json:"id_producto"`
-    Nombre           string   `json:"nombre"`
-    Descripcion      *string  `json:"descripcion"`       
-    PrecioActual     float64  `json:"precio_actual"`
-    FechaVencimiento *string  `json:"fecha_vencimiento"` 
-    Imagen           *string  `json:"imagen"`            
-    Stock            int      `json:"stock"`
-	Activo           bool     `json:"activo"`
-    IDCategoria      int      `json:"id_categoria"`
-    IDProveedor      int      `json:"id_proveedor"`
+    IDProducto       int `gorm:"primaryKey;column:id_producto" json:"id_producto"`
+    Nombre           string `gorm:"column:nombre" json:"nombre"`
+    Descripcion      *string `gorm:"column:descripcion" json:"descripcion"`       
+    PrecioActual     float64 `gorm:"column:precio_actual" json:"precio_actual"`
+    FechaVencimiento *string `gorm:"column:fecha_vencimiento" json:"fecha_vencimiento"` 
+    Imagen           *string `gorm:"column:imagen" json:"imagen"`            
+    Stock            int `gorm:"column:stock_actual" json:"stock"`
+	Activo           bool `gorm:"column:activo" json:"activo"`
+    IDCategoria      int `gorm:"column:id_categoria" json:"id_categoria"`
+    IDProveedor      int `gorm:"column:id_proveedor" json:"id_proveedor"`
+}
+
+func (Producto) TableName() string {
+	return "producto"
 }
 
 type ItemCompra struct {

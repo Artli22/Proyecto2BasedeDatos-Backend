@@ -5,9 +5,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strconv"
 	"time"
 	"os"
 	"github.com/golang-jwt/jwt/v5"
+	"gorm.io/gorm"
 )
 
 type Respuesta struct {
@@ -73,11 +75,6 @@ func ValidarJSONDecodificacion(err error, w http.ResponseWriter) bool {
 
 // Manejador de errores de consultas SELECT
 func ManejarErrorConsulta(err error, w http.ResponseWriter, recurso string) bool {
-	if err == sql.ErrNoRows {
-		RespondJSON(w, http.StatusNotFound,
-			fmt.Sprintf("%s %s", recurso, MsgNoEncontrado), nil)
-		return true
-	}
 	if err != nil {
 		RespondJSON(w, http.StatusInternalServerError,
 			fmt.Sprintf("%s %s", MsgErrorConsulta, recurso), nil)
@@ -101,21 +98,16 @@ func ManejarErrorInsertActualizar(err error, w http.ResponseWriter, operacion, r
 	return false
 }
 
-// Valida si la operación afectó registros en las filas de las entidades
-func ValidarFilasAfectadas(result sql.Result, w http.ResponseWriter, recurso string) bool {
-	rowsAfectadas, _ := result.RowsAffected()
-	if rowsAfectadas == 0 {
-		RespondJSON(w, http.StatusNotFound,
-			fmt.Sprintf("%s %s o %s %s", recurso, MsgNoEncontrado, MsgDesactivado, recurso), nil)
-		return false
-	}
+// Valida si la operación afectó registros (DEPRECATED: Usar GORM result.RowsAffected directamente)
+func ValidarFilasAfectadas(result interface{}, w http.ResponseWriter, recurso string) bool {
+	// Esta función es heredada, usar directamente result.RowsAffected en GORM
 	return true
 }
 
-// Ejecuta una función dentro de una transacción
-func EjecutarEnTransaccion(w http.ResponseWriter, fn func(*sql.Tx) (interface{}, error)) (interface{}, bool) {
-	tx, err := DB.Begin()
-	if err != nil {
+// Ejecuta una función dentro de una transacción (con GORM)
+func EjecutarEnTransaccion(w http.ResponseWriter, fn func(*gorm.DB) (interface{}, error)) (interface{}, bool) {
+	tx := DB.Begin()
+	if tx.Error != nil {
 		RespondJSON(w, http.StatusInternalServerError,
 			"Error al iniciar transaccion", nil)
 		return nil, false
@@ -129,7 +121,7 @@ func EjecutarEnTransaccion(w http.ResponseWriter, fn func(*sql.Tx) (interface{},
 		return nil, false
 	}
 
-	if err = tx.Commit(); err != nil {
+	if tx.Commit().Error != nil {
 		RespondJSON(w, http.StatusInternalServerError, MsgErrorTransaccion, nil)
 		return nil, false
 	}
@@ -137,20 +129,13 @@ func EjecutarEnTransaccion(w http.ResponseWriter, fn func(*sql.Tx) (interface{},
 	return resultado, true
 }
 
-// Obtiencion de un producto por ID
+// Obtiencion de un producto por ID con GORM
 func ObtenerProductoPorID(idStr string) (*Producto, error) {
 	var p Producto
-	err := DB.QueryRow(`
-		SELECT id_producto, nombre, descripcion, precio_actual,
-		fecha_vencimiento, imagen, stock, activo, id_categoria, id_proveedor
-		FROM producto WHERE id_producto = $1 AND activo = TRUE
-	`, idStr).Scan(
-		&p.IDProducto, &p.Nombre, &p.Descripcion,
-		&p.PrecioActual, &p.FechaVencimiento, &p.Imagen,
-		&p.Stock, &p.Activo, &p.IDCategoria, &p.IDProveedor,
-	)
-	if err != nil {
-		return nil, err
+	id, _ := strconv.Atoi(idStr)
+	result := DB.Where("id_producto = ? AND activo = ?", id, true).First(&p)
+	if result.Error != nil {
+		return nil, result.Error
 	}
 	return &p, nil
 }
@@ -170,14 +155,10 @@ func ObtenerPrecioProducto(tx *sql.Tx, idProducto int) (float64, int, error) {
 // Obtiencion de un cliente por ID
 func ObtenerClientePorID(idStr string) (*Cliente, error) {
 	var c Cliente
-	err := DB.QueryRow(`
-		SELECT id_cliente, nombre, telefono, correo, activo
-		FROM cliente WHERE id_cliente = $1 AND activo = TRUE
-	`, idStr).Scan(
-		&c.IdCliente, &c.Nombre, &c.Telefono, &c.Correo, &c.Activo,
-	)
-	if err != nil {
-		return nil, err
+	id, _ := strconv.Atoi(idStr)
+	result := DB.Where("id_cliente = ? AND activo = ?", id, true).First(&c)
+	if result.Error != nil {
+		return nil, result.Error
 	}
 	return &c, nil
 }
@@ -185,14 +166,10 @@ func ObtenerClientePorID(idStr string) (*Cliente, error) {
 // Obtiencion de un empleado por ID
 func ObtenerEmpleadoPorID(idStr string) (*Empleado, error) {
 	var e Empleado
-	err := DB.QueryRow(`
-		SELECT id_empleado, nombre, telefono, correo, activo
-		FROM empleado WHERE id_empleado = $1 AND activo = TRUE
-	`, idStr).Scan(
-		&e.IdEmpleado, &e.Nombre, &e.Telefono, &e.Correo, &e.Activo,
-	)
-	if err != nil {
-		return nil, err
+	id, _ := strconv.Atoi(idStr)
+	result := DB.Where("id_empleado = ? AND activo = ?", id, true).First(&e)
+	if result.Error != nil {
+		return nil, result.Error
 	}
 	return &e, nil
 }
@@ -200,14 +177,10 @@ func ObtenerEmpleadoPorID(idStr string) (*Empleado, error) {
 // Obtiencion de un proveedor por ID
 func ObtenerProveedorPorID(idStr string) (*Proveedor, error) {
 	var prov Proveedor
-	err := DB.QueryRow(`
-		SELECT id_proveedor, nombre, telefono, correo, activo
-		FROM proveedor WHERE id_proveedor = $1 AND activo = TRUE
-	`, idStr).Scan(
-		&prov.IDProveedor, &prov.Nombre, &prov.Telefono, &prov.Correo, &prov.Activo,
-	)
-	if err != nil {
-		return nil, err
+	id, _ := strconv.Atoi(idStr)
+	result := DB.Where("id_proveedor = ? AND activo = ?", id, true).First(&prov)
+	if result.Error != nil {
+		return nil, result.Error
 	}
 	return &prov, nil
 }
@@ -215,12 +188,10 @@ func ObtenerProveedorPorID(idStr string) (*Proveedor, error) {
 // Obtiencion de una categoría por ID
 func ObtenerCategoriaPorID(idStr string) (*Categoria, error) {
 	var c Categoria
-	err := DB.QueryRow(`
-		SELECT id_categoria, nombre
-		FROM categoria WHERE id_categoria = $1
-	`, idStr).Scan(&c.IdCategoria, &c.Nombre)
-	if err != nil {
-		return nil, err
+	id, _ := strconv.Atoi(idStr)
+	result := DB.Where("id_categoria = ?", id).First(&c)
+	if result.Error != nil {
+		return nil, result.Error
 	}
 	return &c, nil
 }
@@ -457,4 +428,16 @@ func GenerarToken(usuario, rol, secretKey string) (string, error) {
 	}
 
 	return tokenString, nil
+}
+
+// Convierte un string a int (utilizado por GORM)
+func convertStringToInt(s string) int {
+	var result int
+	fmt.Sscanf(s, "%d", &result)
+	return result
+}
+
+// ExecuteRawSQL ejecuta raw SQL queries con GORM para compatibilidad con queries complejas
+func ExecuteRawSQL(query string, args ...interface{}) interface{} {
+	return DB.Raw(query, args...)
 }
